@@ -10,3 +10,5 @@ build/
 *.jks
 *.keystore
 keystore.properties
+*.apk
+*.aab

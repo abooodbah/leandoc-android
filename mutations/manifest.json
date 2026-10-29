@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Add the INTERNET permission",
+    "suite": "jvm",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "    <application\n",
+    "new": "    <uses-permission android:name=\"android.permission.INTERNET\" />\n\n    <application\n"
+  },
+  {
+    "name": "Drop .docx from the VIEW filter",
+    "suite": "jvm",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:scheme=\"content\" />\n                <data android:mimeType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\" />\n",
+    "new": "            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:scheme=\"content\" />\n"
+  },
+  {
+    "name": "Turn WebView metrics back on",
+    "suite": "jvm",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "android:name=\"android.webkit.WebView.MetricsOptOut\"\n            android:value=\"true\"",
+    "new": "android:name=\"android.webkit.WebView.MetricsOptOut\"\n            android:value=\"false\""
+  },
+  {
+    "name": "Turn Safe Browsing back on",
+    "suite": "jvm",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "android:name=\"android.webkit.WebView.EnableSafeBrowsing\"\n            android:value=\"false\"",
+    "new": "android:name=\"android.webkit.WebView.EnableSafeBrowsing\"\n            android:value=\"true\""
+  },
+  {
+    "name": "Claim legacy .doc files",
+    "suite": "jvm",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "                <data android:mimeType=\"application/vnd.ms-word.template.macroEnabled.12\" />\n            </intent-filter>\n\n            <!-- Some apps",
+    "new": "                <data android:mimeType=\"application/vnd.ms-word.template.macroEnabled.12\" />\n                <data android:mimeType=\"application/msword\" />\n            </intent-filter>\n\n            <!-- Some apps"
+  }
+]
