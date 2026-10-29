@@ -295,3 +295,62 @@ jobs:
         run: |
           echo "Emulator: API 34 AOSP image, x86_64, pixel_6 profile, 4 cores, SwiftShader graphics." | tee -a "$GITHUB_STEP_SUMMARY"
           cat measure/results.md | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+  screenshots:
+    name: Store screenshots (${{ matrix.theme }})
+    # Only for pull requests from store branches. The images are printed to
+    # the log as base64 JPEG between markers, because artifacts cannot be
+    # fetched from where the maintainer reviews this.
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'store')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        theme: [light, dark]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build the app and the test file provider
+        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+
+      - name: Capture
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          # 1080 x 1920: Google Play wants phone screenshots no longer than 2:1.
+          profile: pixel_2
+          cores: 4
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: scripts/screenshots.sh ${{ matrix.theme }}
+
+      - name: Print the screenshots
+        if: always()
+        run: |
+          for shot in screenshots/*.png; do
+            [ -f "$shot" ] || continue
+            jpeg="${shot%.png}.jpg"
+            convert "$shot" -quality 82 "$jpeg"
+            echo "=== $(basename "$jpeg") $(identify -format '%wx%h' "$jpeg") $(stat -c %s "$jpeg") bytes ==="
+            base64 -w 120 "$jpeg"
+            echo "=== end ==="
+          done
