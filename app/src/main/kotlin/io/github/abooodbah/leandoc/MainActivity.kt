@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.Gravity
@@ -46,6 +47,15 @@ import kotlin.math.roundToInt
  * checks and sanitizes every document before the page sees it.
  */
 class MainActivity : Activity() {
+    // Milliseconds from creation to each step of the first document, for
+    // scripts/measure.sh. Each step is logged once per activity.
+    private val createdAt = SystemClock.uptimeMillis()
+    private val phases = HashSet<String>()
+
+    private fun phase(name: String) {
+        if (phases.add(name)) Log.i("LeanDocTiming", "phase $name ${SystemClock.uptimeMillis() - createdAt} ms")
+    }
+
 
     private sealed interface Shown {
         data object Empty : Shown
@@ -108,6 +118,7 @@ class MainActivity : Activity() {
         }
         try {
             createWebView()
+            phase("webview created")
         } catch (error: RuntimeException) {
             // Thrown when the WebView provider is missing or being updated.
             showUnsupported(WebViewSupport.message(null))
@@ -309,6 +320,7 @@ class MainActivity : Activity() {
         override fun onPageFinished(view: WebView, url: String) {
             if (view === webView && !portPosted && url.startsWith(ReaderAssets.PAGE_URL)) {
                 portPosted = true
+                phase("page loaded")
                 connect(view)
             }
         }
@@ -377,6 +389,7 @@ class MainActivity : Activity() {
         when (val command = ReaderCommand.parse(message) ?: return) {
             ReaderCommand.Ready -> {
                 readerReady = true
+                phase("reader ready")
                 send(HostMessages.host(versionName()))
                 send(HostMessages.theme(theme, readerView))
                 sendCurrentView()
@@ -410,6 +423,7 @@ class MainActivity : Activity() {
                 // The page was replaced after the package was dropped.
                 source?.let(::open)
             } else {
+                phase("document sent")
                 send(HostMessages.document(current.generation, current.name, ReaderAssets.packageUrl(current.generation), current.report))
             }
             is Shown.Fallback -> {
@@ -427,6 +441,7 @@ class MainActivity : Activity() {
             0,
             object : WebView.VisualStateCallback() {
                 override fun onComplete(requestId: Long) {
+                    phase("drawn")
                     try {
                         reportFullyDrawn()
                     } catch (error: SecurityException) {

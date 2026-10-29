@@ -24,7 +24,8 @@ LARGE=features/long-300-pages.docx
 LARGE_NAME="long-300-pages.docx"
 LARGE_TYPE=application/vnd.openxmlformats-officedocument.wordprocessingml.document
 WEBVIEW=yes
-INDEXED=no
+MEASURE_INDEXING=no
+TIMING_TAG=LeanDocTiming
 
 ROUNDS=${ROUNDS:-3}
 STARTS_PER_ROUND=${STARTS_PER_ROUND:-3}
@@ -106,7 +107,7 @@ if [ -n "$EMPTY_APK" ]; then
   log "empty app: first frame $EMPTY_FIRST ms (median of $STARTS)"
 fi
 
-declare -A FIRST_FRAME=() DRAWN=()
+declare -A FIRST_FRAME=() DRAWN=() PHASES=() PHASE_NAMES=()
 for round in $(seq 1 "$ROUNDS"); do
   for label in "${LABELS[@]}"; do
     install "$label"
@@ -116,6 +117,12 @@ for round in $(seq 1 "$ROUNDS"); do
       total=$(open_document "$SMALL" "$SMALL_TYPE" | sed -n 's/^TotalTime: *//p')
       drawn=$(fully_drawn 10)
       log "round $round $label: first frame ${total:-NA} ms, drawn $drawn ms"
+      # The app's own "phase NAME N ms" lines, from creation to each step.
+      while read -r name value; do
+        [ -n "$name" ] || continue
+        PHASES["$label|$name"]+="$value"$'\n'
+        PHASE_NAMES["$name"]=1
+      done < <(adb logcat -d -v raw -s "${TIMING_TAG:-none}:I" | sed -n 's/^phase \(.*\) \([0-9][0-9]*\) ms$/\1 \2/p' | sed 's/ \([0-9][0-9]*\)$/|\1/' | tr ' ' '_' | tr '|' ' ')
       FIRST_FRAME[$label]+="${total:-NA}"$'\n'
       DRAWN[$label]+="$drawn"$'\n'
     done
@@ -180,7 +187,7 @@ for label in "${LABELS[@]}"; do
     open_document "$LARGE" "$LARGE_TYPE" >/dev/null
     drawn=$(fully_drawn 90)
     indexed=NA
-    if [ "$INDEXED" = yes ]; then indexed=$(indexed_ms 60); fi
+    if [ "$MEASURE_INDEXING" = yes ]; then indexed=$(indexed_ms 60); fi
     sleep 5
     app=$(pss_of "$PKG")
     renderer=0
@@ -239,7 +246,7 @@ row() {
   row "Cold start to $DRAWN_WHAT drawn, $SMALL_NAME (ms, median of $STARTS)" "${drawn[@]}"
   row "**Drawn minus the empty app's first frame** (ms)" "${drawn_net[@]}"
   row "$LARGE_NAME drawn after a cold start (ms, median of 3)" "${large[@]}"
-  if [ "$INDEXED" = yes ]; then row "Indexing all rows of $LARGE_NAME (ms, median of 3)" "${indexed[@]}"; fi
+  if [ "$MEASURE_INDEXING" = yes ]; then row "Indexing all rows of $LARGE_NAME (ms, median of 3)" "${indexed[@]}"; fi
   small_app=(); small_renderer=(); small_total=()
   for label in "${LABELS[@]}"; do
     small_app+=("${SMALL_APP[$label]:-NA}")
@@ -259,6 +266,20 @@ row() {
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
   row "90th percentile frame time (software GPU, not a budget check)" "${p90[@]}"
+  if [ "${#PHASE_NAMES[@]}" -gt 0 ]; then
+    echo
+    echo "Where the time goes when $SMALL_NAME is opened: milliseconds from the activity's"
+    echo "creation to each step, as the app logs them (median of $STARTS)."
+    echo
+    printf '| Step |'; for label in "${LABELS[@]}"; do printf ' %s |' "$label"; done; printf '\n'
+    printf '| --- |'; for _ in "${LABELS[@]}"; do printf ' ---: |'; done; printf '\n'
+    for name in "webview_created" "page_loaded" "reader_ready" "document_sent" "drawn"; do
+      [ -n "${PHASE_NAMES[$name]:-}" ] || continue
+      printf '| %s |' "${name//_/ }"
+      for label in "${LABELS[@]}"; do printf ' %s |' "$(median <<<"${PHASES[$label|$name]:-}")"; done
+      printf '\n'
+    done
+  fi
   echo
   echo "Empty app on the same emulator: $EMPTY_FIRST ms to first frame (median of $STARTS)."
   echo "Start time and jank on this emulator are not the budget check: it has no GPU,"
