@@ -321,6 +321,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Free disk space for the emulator
+        # The emulator image, the AVD and the NDK do not fit next to every
+        # preinstalled toolchain on the runner's disk.
+        run: |
+          df -h /
+          ls "$ANDROID_HOME/ndk" || true
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules
+          for ndk in "$ANDROID_HOME"/ndk/*; do
+            [ "$(basename "$ndk")" = "28.2.13676358" ] || sudo rm -rf "$ndk"
+          done
+          df -h /
+
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
