@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Debug builds only: lets the instrumented tests' fixture provider (in the
+         test APK) be seen from Android 11 on. Release builds get files with a
+         URI grant, which makes the sender visible without this. -->
+    <queries>
+        <provider android:authorities="io.github.abooodbah.leandoc.fixtures" />
+    </queries>
+
+</manifest>
