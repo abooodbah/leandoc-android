@@ -7,7 +7,8 @@ the sums file changing with it.
 
 | Files | From | Version |
 | --- | --- | --- |
-| `app/src/main/assets/reader/reader.js`, `reader.css`, `fixups.js`, `fidelity.js` | desktop LeanDoc `assets/` | commit in `reader-assets.sha256` |
+| `app/src/main/assets/reader/reader.css`, `fixups.js`, `fidelity.js` | desktop LeanDoc `assets/` | commit in `reader-assets.sha256` |
+| `app/src/main/assets/reader/reader.js` | desktop LeanDoc `assets/reader.js`, with the lowest fit zoom changed from 50% to 25% so a page fits a phone | same |
 | `app/src/main/assets/reader/reader.html` | desktop LeanDoc `assets/reader.html`, plus one `<script>` line for `android-host.js` | same |
 | `app/src/main/cpp/core/` | desktop LeanDoc `src/core/` | same |
 | `native-tests/CoreTests.cpp`, `TestZip.*` | desktop LeanDoc `tests/core/` | same |

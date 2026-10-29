@@ -18,6 +18,15 @@ mkdir -p "$assets/vendor" "$assets/fonts" "$cpp/core" "$cpp/miniz" "$cpp/pugixml
 for file in reader.css reader.js fixups.js fidelity.js; do
   cp "$desktop/assets/$file" "$assets/"
 done
+# The only change to the desktop script: fit width and automatic zoom may go
+# below 50%, so a Letter or A4 page fits a phone's width. The steps of the
+# zoom buttons stay as on the desktop. The check stops the update if the
+# desktop line changes, so the patch is looked at again.
+fit='return Math.max(0.5, Math.min(3, available / pageWidthPixels()));'
+grep -qF "$fit" "$assets/reader.js"
+sed -i 's|return Math.max(0.5, Math.min(3, available / pageWidthPixels()));|return Math.max(0.25, Math.min(3, available / pageWidthPixels()));|' \
+  "$assets/reader.js"
+grep -qF 'return Math.max(0.25, Math.min(3, available / pageWidthPixels()));' "$assets/reader.js"
 # The only change to the desktop page: load the Android bridge first.
 sed 's|^    <link rel="stylesheet" href="/reader.css" />$|&\n    <script src="/android-host.js"></script>|' \
   "$desktop/assets/reader.html" > "$assets/reader.html"

@@ -57,4 +57,60 @@
       port.postMessage(message);
     });
   });
+
+  // On a phone the desktop toolbar wraps to three rows under the file name.
+  // Below 760 px the theme, other-app and Open buttons move up beside the
+  // file name, and the find field, the view switch and the zoom share the
+  // second row. The buttons keep their ids and handlers; they move back into
+  // the toolbar when the page is wider again, as in landscape on a tablet.
+  var phoneStyle = document.createElement("style");
+  phoneStyle.textContent =
+    "@media (max-width: 760px) {" +
+    " .topbar { flex-wrap: wrap; gap: 6px; padding: 6px 12px; }" +
+    " .wordmark { display: none; }" +
+    " .identity { flex: 1 1 0; min-width: 0; }" +
+    " .file-copy, .file-copy strong { min-width: 0; max-width: 100%; }" +
+    " .phone-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }" +
+    " .phone-actions .button { padding-right: 10px; padding-left: 10px; }" +
+    " .toolbar { width: 100%; flex-wrap: wrap; gap: 4px; }" +
+    " .search-field { flex: 1 1 0; width: auto; min-width: 88px; }" +
+    " #findCount:empty { min-width: 0; padding-right: 0; }" +
+    " .segmented .segment { min-width: 0; padding-right: 8px; padding-left: 8px; }" +
+    " .zoom-step { width: 28px; }" +
+    " .zoom-value { min-width: 44px; }" +
+    "}";
+  document.head.appendChild(phoneStyle);
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var toolbar = document.querySelector(".toolbar");
+    var identity = document.querySelector(".identity");
+    var moved = ["themeButton", "editorButton", "openButton"].map(function (id) {
+      return document.getElementById(id);
+    }).filter(Boolean);
+    if (!toolbar || !identity || !window.matchMedia) {
+      return;
+    }
+    var actions = document.createElement("div");
+    actions.className = "phone-actions";
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-label", "Document actions");
+    var phone = window.matchMedia("(max-width: 760px)");
+    function place() {
+      if (phone.matches) {
+        moved.forEach(function (button) { actions.appendChild(button); });
+        if (!actions.parentNode) {
+          identity.parentNode.insertBefore(actions, identity.nextSibling);
+        }
+      } else if (actions.parentNode) {
+        moved.forEach(function (button) { toolbar.appendChild(button); });
+        actions.parentNode.removeChild(actions);
+      }
+    }
+    place();
+    if (phone.addEventListener) {
+      phone.addEventListener("change", place);
+    } else if (phone.addListener) {
+      phone.addListener(place);
+    }
+  });
 }());

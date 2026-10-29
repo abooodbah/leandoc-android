@@ -2823,7 +2823,7 @@
     if (available <= 0) {
       return 1;
     }
-    return Math.max(0.5, Math.min(3, available / pageWidthPixels()));
+    return Math.max(0.25, Math.min(3, available / pageWidthPixels()));
   }
 
   function effectiveZoom() {
