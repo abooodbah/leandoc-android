@@ -962,24 +962,6 @@ body {
   padding-bottom: 0;
 }
 
-/* Word raises and lowers superscript and subscript text without making its
-   line taller; in the browser a shifted run pushes its line apart. In the
-   tables of a 62-page supplement every row with CO2 or kg-1 was 2 to 5 pt
-   taller than Word's, and the document ran a page long. */
-#docBody section.docx :where(sub, sup) {
-  line-height: 0;
-}
-
-/* The part of a list item continued on the next page has no number or
-   bullet of its own, and does not count as another item. */
-#docBody section.docx p[data-ld-continued]::before {
-  content: none !important;
-}
-
-#docBody section.docx p[data-ld-continued] {
-  list-style-type: none !important;
-}
-
 /* Sections on a page stack as in Word. docx-preview gives every section the
    page's spare space as a bottom margin, which opened a gap between two
    sections; only the last one takes it, so the notes and the footer stay at

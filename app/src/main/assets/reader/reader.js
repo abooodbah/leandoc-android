@@ -69,10 +69,6 @@
   // Only the active tab's package is kept, for view switches.
   var packageCache = null;
   var blobUrls = [];
-  // Each title-page section's header and footer for its later pages (see
-  // renderTitleChrome), by the section's index in Fixups.TITLE_SECTION.
-  var titleChrome = [];
-  var CHROME = "__ldChrome";
   var savedScroll = new Map();
   var collapsedBars = new Map();
   var announcedDocuments = new Set();
@@ -256,7 +252,6 @@
     clearSearch();
     revokeBlobUrls(blobUrls);
     blobUrls = [];
-    stopMatchingNear();
     elements.docStyles.replaceChildren();
     elements.docBody.replaceChildren();
     elements.docBody.setAttribute("aria-busy", "false");
@@ -541,7 +536,6 @@
     var expected = current;
     var parsed = null;
     var hyphenate = false;
-    var titleSections = [];
     return window.docx.parseAsync(packageCache.buffer, options).then(function (result) {
       parsed = result;
       return yieldToPage();
@@ -549,19 +543,12 @@
       if (serial !== renderSerial) {
         return null;
       }
-      var prepared = Fixups.prepareModel(parsed);
-      hyphenate = prepared.autoHyphenation;
-      titleSections = prepared.titleSections || [];
+      hyphenate = Fixups.prepareModel(parsed).autoHyphenation;
       return yieldToPage().then(function () {
         if (serial !== renderSerial) {
           return null;
         }
-        return window.docx.renderDocument(parsed, options).then(function (nodes) {
-          return renderTitleChrome(parsed, titleSections, options).then(function (chrome) {
-            titleChrome = chrome;
-            return nodes;
-          });
-        });
+        return window.docx.renderDocument(parsed, options);
       }).then(function (nodes) {
         if (!nodes) {
           return null;
@@ -624,70 +611,12 @@
   var ATOMIC_INLINE = /^(math|img|svg|canvas|object|video|iframe)$/i;
   var ATOMIC_SELECTOR = "math, img, svg, canvas, object, video, iframe";
 
-  // A block that moves to the next page with the block after it: a heading,
-  // or a paragraph Word keeps with the next (w:keepNext, ld-keep-next).
   function isHeadingBlock(node) {
     if (/^H[1-6]$/.test(node.nodeName)) {
       return true;
     }
     var name = typeof node.className === "string" ? node.className : "";
-    return /(^|[\s_-])(heading|title|subtitle)/i.test(name) || /(^|\s)ld-keep-next(\s|$)/.test(name);
-  }
-
-  // The top of each line a range of a paragraph covers, or null when its
-  // lines do not run down one column. A line starts where a fragment begins
-  // below every fragment of the line before, so a raised or lowered run (a
-  // citation, a subscript) stays on its line.
-  function lineTops(range) {
-    var tops = [];
-    var bottom = -Infinity;
-    var ordered = true;
-    Array.prototype.forEach.call(range.getClientRects(), function (rect) {
-      if (rect.width === 0 && rect.height === 0) {
-        return;
-      }
-      if (rect.top >= bottom - 1) {
-        tops.push(rect.top);
-        bottom = rect.bottom;
-      } else if (tops.length && rect.bottom <= tops[tops.length - 1] + 1) {
-        // Above the current line: text continued in another column.
-        ordered = false;
-      } else {
-        bottom = Math.max(bottom, rect.bottom);
-      }
-    });
-    return ordered ? tops : null;
-  }
-
-  // Word's widow and orphan control, on unless the paragraph turns it off:
-  // a paragraph split across pages leaves at least two lines on each. Returns
-  // the point to split before (the same one, or the start of the last kept
-  // line), or null when the whole paragraph moves.
-  function widowSafePoint(paragraph, point, kept) {
-    if (/(^|\s)ld-widow-off(\s|$)/.test(paragraph.className)) {
-      return point;
-    }
-    var moving = document.createRange();
-    moving.setStart(kept.endContainer, kept.endOffset);
-    moving.setEnd(paragraph, paragraph.childNodes.length);
-    var keptTops = lineTops(kept);
-    var movingTops = lineTops(moving);
-    if (!keptTops || !movingTops) {
-      return point;
-    }
-    if (keptTops.length < 2) {
-      return null;
-    }
-    if (movingTops.length >= 2) {
-      return point;
-    }
-    if (keptTops.length < 3) {
-      return null;
-    }
-    var lastTop = keptTops[keptTops.length - 1];
-    return firstPointPast(paragraph, function (rect) {
-      return rect.top >= lastTop - 1;
-    });
+    return /(^|[\s_-])(heading|title|subtitle)/i.test(name);
   }
 
   function childrenNamed(page, name) {
@@ -775,117 +704,11 @@
     table.style.width = width + "px";
   }
 
-  function hasClass(node, name) {
-    return new RegExp("(^|\\s)" + name + "(\\s|$)").test(typeof node.className === "string" ? node.className : "");
-  }
-
-  // The rows Word repeats at the top of each page a table runs onto: a
-  // thead, or the leading rows marked w:tblHeader (Fixups ld-header-row).
-  function leadingHeaderRows(table) {
-    if (table.tHead) {
-      return table.tHead.rows.length;
-    }
-    var count = 0;
-    while (count < table.rows.length && hasClass(table.rows[count], "ld-header-row")) {
-      count += 1;
-    }
-    return count < table.rows.length ? count : 0;
-  }
-
-  // How many lines of a paragraph lie inside the text area, from its top.
-  function linesInside(paragraph, over) {
-    var range = document.createRange();
-    range.selectNodeContents(paragraph);
-    var count = 0;
-    var bottom = -Infinity;
-    var rects = range.getClientRects();
-    for (var index = 0; index < rects.length; index += 1) {
-      var rect = rects[index];
-      if (rect.width === 0 && rect.height === 0) {
-        continue;
-      }
-      if (over(rect)) {
-        break;
-      }
-      if (rect.top >= bottom - 1) {
-        count += 1;
-        bottom = rect.bottom;
-      }
-    }
-    return count;
-  }
-
-  // Where each cell of a row crossing the bottom of the page splits, or null
-  // when the row moves whole: Word breaks a row between lines, in every
-  // cell at once, unless the row is marked w:cantSplit or not one line of
-  // it fits. A row that starts or ends a vertical merge moves whole.
-  function rowSplit(row, over) {
-    if (hasClass(row, "ld-cant-split")) {
-      return null;
-    }
-    var cells = Array.prototype.slice.call(row.cells);
-    if (!cells.length || cells.some(function (cell) { return cell.rowSpan > 1; })) {
-      return null;
-    }
-    var fits = false;
-    var plans = cells.map(function (cell) {
-      var blocks = Array.prototype.slice.call(cell.children);
-      var at = -1;
-      for (var index = 0; index < blocks.length; index += 1) {
-        if (isOver(blocks[index], over)) {
-          at = index;
-          break;
-        }
-      }
-      if (at < 0 ? cell.textContent.trim() : at > 0) {
-        fits = true;
-      } else if (at === 0 && blocks[0].nodeName === "P") {
-        var lines = linesInside(blocks[0], over);
-        if (lines >= 2 || (lines === 1 && hasClass(blocks[0], "ld-widow-off"))) {
-          fits = true;
-        }
-      }
-      return { cell: cell, blocks: blocks, at: at };
-    });
-    return fits ? plans : null;
-  }
-
-  // Moves the lines of each cell past the page into a copy of the row and
-  // returns the copy.
-  function splitRow(row, plans, over) {
-    var rest = row.cloneNode(false);
-    rest.removeAttribute("id");
-    plans.forEach(function (plan) {
-      var copy = plan.cell.cloneNode(false);
-      copy.removeAttribute("id");
-      rest.appendChild(copy);
-      if (plan.at < 0) {
-        return;
-      }
-      var from = plan.at;
-      var block = plan.blocks[from];
-      var moved = block.nodeName === "P" ? splitParagraph(block, over) : null;
-      if (moved) {
-        copy.appendChild(moved);
-        from += 1;
-      }
-      for (; from < plan.blocks.length; from += 1) {
-        copy.appendChild(plan.blocks[from]);
-      }
-    });
-    return rest;
-  }
-
   // Moves the rows that do not fit into a copy of the table placed after it,
-  // and returns the copy, or null when the table moves whole. A row that
-  // crosses the bottom splits between lines (rowSplit). The copy starts
-  // with the table's header rows. A table at the top of its page whose first
-  // row is taller than the page keeps that row, and the rows after it move:
-  // they stayed on the page, past its bottom, and a 63-page document showed
-  // as 56.
+  // and returns the copy, or null when not even the first body row fits.
   function splitTable(table, over) {
     var rows = table.rows;
-    var headerRows = leadingHeaderRows(table);
+    var headerRows = table.tHead ? table.tHead.rows.length : 0;
     var first = -1;
     for (var index = headerRows; index < rows.length; index += 1) {
       if (isOver(rows[index], over)) {
@@ -893,62 +716,36 @@
         break;
       }
     }
-    if (first < 0) {
+    if (first <= headerRows) {
       return null;
     }
-    var plans = rowSplit(rows[first], over);
-    var from = first;
-    if (!plans && first === headerRows) {
-      if (table.previousElementSibling || first + 1 >= rows.length) {
-        return null;
-      }
-      from = first + 1;
-    }
     freezeColumns(table);
-    var piece = plans ? splitRow(rows[first], plans, over) : null;
     var rest = table.cloneNode(false);
     Array.prototype.forEach.call(table.children, function (child) {
       if (child.nodeName === "COLGROUP" || child.nodeName === "THEAD") {
         rest.appendChild(child.cloneNode(true));
       }
     });
-    var moving = [];
-    if (!table.tHead) {
-      for (var header = 0; header < headerRows; header += 1) {
-        var repeated = rows[header].cloneNode(true);
-        repeated.setAttribute("data-ld-repeated", "");
-        repeated.removeAttribute("id");
-        Array.prototype.forEach.call(repeated.querySelectorAll("[id]"), function (node) {
-          node.removeAttribute("id");
-        });
-        moving.push({ row: repeated, parent: rows[header].parentNode });
-      }
-    }
-    if (piece) {
-      moving.push({ row: piece, parent: rows[first].parentNode });
-      from = first + 1;
-    }
-    Array.prototype.slice.call(rows, from).forEach(function (row) {
-      moving.push({ row: row, parent: row.parentNode });
-    });
+    var moving = Array.prototype.slice.call(rows, first);
     var sections = [];
-    moving.forEach(function (item) {
-      if (item.parent === table) {
-        rest.appendChild(item.row);
+    moving.forEach(function (row) {
+      var parent = row.parentNode;
+      if (parent === table) {
+        rest.appendChild(row);
         return;
       }
       var copy = null;
       for (var at = 0; at < sections.length; at += 1) {
-        if (sections[at].source === item.parent) {
+        if (sections[at].source === parent) {
           copy = sections[at].copy;
         }
       }
       if (!copy) {
-        copy = item.parent.cloneNode(false);
+        copy = parent.cloneNode(false);
         rest.appendChild(copy);
-        sections.push({ source: item.parent, copy: copy });
+        sections.push({ source: parent, copy: copy });
       }
-      copy.appendChild(item.row);
+      copy.appendChild(row);
     });
     queueRows(table, rest, sections.length === 0);
     table.parentNode.insertBefore(rest, table.nextSibling);
@@ -1081,11 +878,10 @@
   }
 
   // Splits a paragraph before its first line past the text area and returns
-  // the part that moves, or null when no line of it fits. A list item splits
-  // too, as in Word; its continuation shows no number (reader.css). Moved
-  // whole, a 204 pt numbered paragraph left most of a column empty.
+  // the part that moves, or null when no line of it fits. A list item moves
+  // whole, or its number would print twice.
   function splitParagraph(paragraph, over) {
-    if (paragraph.nodeName !== "P" || /(^|\s)ld-keep-lines(\s|$)/.test(paragraph.className)) {
+    if (paragraph.nodeName !== "P" || /(^|\s)docx-num-/.test(paragraph.className)) {
       return null;
     }
     var point = firstPointPast(paragraph, over);
@@ -1094,23 +890,13 @@
     }
     var kept = document.createRange();
     kept.setStart(paragraph, 0);
-    function keepBefore(at) {
-      if (at.offset < 0) {
-        kept.setEndBefore(at.node);
-      } else {
-        kept.setEnd(at.node, at.offset);
-      }
+    if (point.offset < 0) {
+      kept.setEndBefore(point.node);
+    } else {
+      kept.setEnd(point.node, point.offset);
     }
-    keepBefore(point);
     if (!kept.toString().trim() && !kept.cloneContents().querySelector(ATOMIC_SELECTOR)) {
       return null;
-    }
-    var safe = widowSafePoint(paragraph, point, kept);
-    if (!safe) {
-      return null;
-    }
-    if (safe !== point) {
-      keepBefore(safe);
     }
     var moving = document.createRange();
     moving.setStart(kept.endContainer, kept.endOffset);
@@ -1466,17 +1252,7 @@
     }
 
     var next = page.cloneNode(false);
-    // A title page's own header and footer stay on it (renderTitleChrome).
-    var chrome = page[CHROME];
-    next[CHROME] = chrome;
-    function chromeOf(name) {
-      if (!chrome) {
-        return childrenNamed(page, name);
-      }
-      var node = name === "HEADER" ? chrome.header : chrome.footer;
-      return node ? [node] : [];
-    }
-    chromeOf("HEADER").forEach(function (header) {
+    childrenNamed(page, "HEADER").forEach(function (header) {
       next.appendChild(header.cloneNode(true));
     });
     var from = articles.indexOf(start.parentNode);
@@ -1505,25 +1281,10 @@
         next.appendChild(child);
       }
     });
-    chromeOf("FOOTER").forEach(function (footer) {
+    childrenNamed(page, "FOOTER").forEach(function (footer) {
       next.appendChild(footer.cloneNode(true));
     });
     page.parentNode.insertBefore(next, page.nextSibling);
-    if (chrome && !chrome.fitted) {
-      // Fitted once, on the first page that shows them, as the rendered
-      // pages were (matchWordLines).
-      chrome.fitted = true;
-      ["HEADER", "FOOTER"].forEach(function (name) {
-        childrenNamed(next, name).forEach(function (node) {
-          matchWordLines(node);
-          if (name === "HEADER") {
-            chrome.header = node.cloneNode(true);
-          } else {
-            chrome.footer = node.cloneNode(true);
-          }
-        });
-      });
-    }
     return next;
   }
 
@@ -1548,10 +1309,7 @@
     }
     var from = childrenNamed(rest, "ARTICLE");
     var to = childrenNamed(page, "ARTICLE");
-    // A column section flows too, into a section with the same columns: in
-    // two-column papers each overflow made a page that held a paragraph or
-    // two, and a 17-page paper showed as 23 pages.
-    return from.length === 1 && to.length > 0 && columnCount(from[0]) === columnCount(to[0]) &&
+    return from.length === 1 && to.length > 0 && columnCount(from[0]) === 1 &&
       from[0].style.cssText === to[0].style.cssText;
   }
 
@@ -1736,20 +1494,9 @@
     elements.docBody.style.visibility = "";
   }
 
-  // `body` gets Word's lines first, in a task of its own: in the same task
-  // as the first layout, a 1,500-row table held the window for 600 ms
-  // where 380 is the layout alone.
-  function paginateMeasurable(pages, serial, body) {
+  function paginateMeasurable(pages, serial) {
     beginMeasuring(serial);
-    return new Promise(function (resolve) {
-      window.setTimeout(resolve, 0);
-    }).then(function () {
-      if (serial !== renderSerial) {
-        return null;
-      }
-      body.forEach(matchWordLines);
-      return paginatePages(pages, serial);
-    }).then(function (result) {
+    return paginatePages(pages, serial).then(function (result) {
       endMeasuring(serial, !result);
       return result;
     }, function (error) {
@@ -1784,438 +1531,12 @@
     });
   }
 
-  // Width of one space in each run font, for shrinkJustifiedSpaces.
-  var spaceContext = null;
-  var spaceWidths = new Map();
-
-  function spaceWidthOf(style) {
-    var font = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(" ");
-    if (!spaceWidths.has(font)) {
-      spaceContext = spaceContext || document.createElement("canvas").getContext("2d");
-      spaceContext.font = font;
-      spaceWidths.set(font, spaceContext.measureText(" ").width);
-    }
-    return spaceWidths.get(font);
-  }
-
-  function hasOwnSpace(element) {
-    for (var node = element.firstChild; node; node = node.nextSibling) {
-      if (node.nodeType === 3 && node.data.indexOf(" ") >= 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function hasOwnText(element) {
-    for (var node = element.firstChild; node; node = node.nextSibling) {
-      if (node.nodeType === 3 && /\S/.test(node.data)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Word makes each line as tall as the text on it. In CSS every line is at
-  // least as tall as its paragraph's own font, which often comes from a
-  // style the runs override: the cells of the survey's tables set 8 pt runs
-  // in a Table Grid style of 11 pt, so every row was a third taller than
-  // Word's and the tables pushed two pages' worth of text onward. A
-  // paragraph with text takes the size of its largest run. Empty paragraphs
-  // keep the size of their mark (Fixups.prepareModel). The paragraph also
-  // takes that run's font: a strut in another font sits on the same
-  // baseline with other ascent and descent, which made the 8 pt cells
-  // 9.96 pt tall where Word's lines are 9.22 pt.
-  //
-  // Every pass below reads all computed styles first and writes after. A
-  // write between two reads makes the browser restyle the document again,
-  // and a 1,000-page report took three times as long to open.
-  function fitParagraphsToRuns(container) {
-    if (!container.querySelectorAll) {
-      return;
-    }
-    var changes = [];
-    container.querySelectorAll("p").forEach(function (paragraph) {
-      var largest = 0;
-      var family = "";
-      [paragraph].concat(Array.prototype.slice.call(paragraph.querySelectorAll("span"))).forEach(function (element) {
-        if (hasOwnText(element)) {
-          var style = getComputedStyle(element);
-          var size = parseFloat(style.fontSize) || 0;
-          if (size > largest) {
-            largest = size;
-            family = style.fontFamily;
-          }
-        }
-      });
-      if (!largest) {
-        return;
-      }
-      var own = getComputedStyle(paragraph);
-      var size = parseFloat(own.fontSize) > largest + 0.01 ? largest + "px" : "";
-      var font = family && own.fontFamily !== family ? family : "";
-      if (size || font) {
-        changes.push([paragraph, size, font]);
-      }
-    });
-    changes.forEach(function (change) {
-      if (change[1]) {
-        change[0].style.fontSize = change[1];
-      }
-      if (change[2]) {
-        change[0].style.fontFamily = change[2];
-      }
-    });
-  }
-
-  // Lets the spaces of justified lines shrink as far as Word lets them (see
-  // Fixups.justifiedWordSpacing). Runs before the pages are measured, since
-  // it changes where lines and pages break.
-  function shrinkJustifiedSpaces(container) {
-    if (!container.querySelectorAll) {
-      return;
-    }
-    var changes = [];
-    container.querySelectorAll("p").forEach(function (paragraph) {
-      if (getComputedStyle(paragraph).textAlign !== "justify") {
-        return;
-      }
-      [paragraph].concat(Array.prototype.slice.call(paragraph.querySelectorAll("span"))).forEach(function (element) {
-        if (hasOwnSpace(element)) {
-          var spacing = Fixups.justifiedWordSpacing(spaceWidthOf(getComputedStyle(element)));
-          if (spacing) {
-            changes.push([element, spacing + "px"]);
-          }
-        }
-      });
-    });
-    changes.forEach(function (change) {
-      change[0].style.wordSpacing = change[1];
-    });
-  }
-
-  // One shared rule per distinct value instead of an inline style on every
-  // paragraph: in Chromium an element with an inline style gets a computed
-  // style of its own, and 13,200 of them took the 1,000-page report from
-  // 294 to 720 MiB.
-  var lineRules = { sheet: null, names: new Map() };
-
-  function lineClass(property, value) {
-    var key = property + ":" + value;
-    if (!lineRules.names.has(key)) {
-      if (!lineRules.sheet) {
-        var element = document.createElement("style");
-        element.id = "ldLineRules";
-        document.head.appendChild(element);
-        lineRules.sheet = element.sheet;
-      }
-      var name = "ld-l" + lineRules.names.size;
-      // #docBody outranks docx-preview's class rules; inline styles still
-      // win, as they did when these were inline.
-      lineRules.sheet.insertRule("#docBody ." + name + " { " + property + ": " + value + "; }",
-        lineRules.sheet.cssRules.length);
-      lineRules.names.set(key, name);
-    }
-    return lineRules.names.get(key);
-  }
-
-  function firstFamily(fontFamily) {
-    return (fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
-  }
-
-  // The browser's normal line height for an installed font, as a multiple of
-  // the size; measured at 1000 px, where rounding to whole pixels does not
-  // matter. NaN when the font is not installed: the browser then draws
-  // another font, and its measure would be that font's.
-  var lineMeasures = new Map();
-
-  function installedLineHeight(family) {
-    if (lineMeasures.has(family)) {
-      return lineMeasures.get(family);
-    }
-    // The probe sits in a box with strict containment, so measuring it lays
-    // out only the box. In the page's own flow each measure laid out the
-    // whole document again: a 1,500-row table spent 3 seconds here.
-    var box = document.createElement("div");
-    box.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;" +
-      "contain:strict;visibility:hidden";
-    var probe = document.createElement("span");
-    probe.style.cssText = "position:absolute;white-space:nowrap;" +
-      "font-size:1000px;line-height:normal;display:inline-block";
-    probe.textContent = "Hxgmilw0";
-    box.appendChild(probe);
-    document.body.appendChild(box);
-    function measure(stack) {
-      probe.style.fontFamily = stack;
-      var box = probe.getBoundingClientRect();
-      return { width: box.width, height: box.height };
-    }
-    var quoted = "\"" + family.replace(/"/g, "") + "\"";
-    var installed = ["serif", "monospace"].some(function (generic) {
-      var own = measure(quoted + ", " + generic);
-      var other = measure(generic);
-      return own.width !== other.width || own.height !== other.height;
-    });
-    var value = installed ? measure(quoted + ", serif").height / 1000 : NaN;
-    document.body.removeChild(box);
-    lineMeasures.set(family, value);
-    return value;
-  }
-
-  // Each paragraph's single line is its font's, as in Word (see
-  // Fixups.wordSingleLine): Calibri and Aptos lines are 1.22 times the size,
-  // not the 1.15 of Times New Roman, and documents in them ran short. A
-  // paragraph that inherits line-height: normal gets the same number, since
-  // normal follows the font the browser draws, which for Aptos is another.
-  function setSingleLines(container) {
-    if (!container.querySelectorAll) {
-      return;
-    }
-    var found = [];
-    container.querySelectorAll("p").forEach(function (paragraph) {
-      var style = getComputedStyle(paragraph);
-      if (firstFamily(style.fontFamily)) {
-        found.push([paragraph, style.fontFamily, style.lineHeight === "normal"]);
-      }
-    });
-    // Measured before any write, so the probe lays out a clean page.
-    var singles = new Map();
-    found.forEach(function (entry) {
-      var stack = entry[1];
-      if (singles.has(stack)) {
-        return;
-      }
-      // A missing font is drawn in the first installed family after it (its
-      // stand-in, Fixups.withFontFallback), which then sets the line.
-      var measured = NaN;
-      stack.split(",").some(function (name) {
-        measured = installedLineHeight(name.replace(/["']/g, "").trim());
-        return !isNaN(measured);
-      });
-      singles.set(stack, String(Fixups.wordSingleLine(firstFamily(stack), measured)));
-    });
-    var empty = [];
-    found.forEach(function (entry) {
-      var paragraph = entry[0];
-      var single = singles.get(entry[1]);
-      paragraph.classList.add(lineClass("--ld-line", single));
-      if (entry[2]) {
-        paragraph.classList.add(lineClass("line-height", single));
-      }
-      if (!/\S/.test(paragraph.textContent)) {
-        empty.push(paragraph);
-      }
-    });
-    // An empty paragraph is one line tall in Word. docx-preview gives it
-    // 1em: an ACM template's footer of 17 empty 9 pt lines was 153 pt
-    // where Word's is 176, and Word's first page held a line less.
-    var heights = empty.map(function (paragraph) {
-      return parseFloat(getComputedStyle(paragraph).lineHeight);
-    });
-    empty.forEach(function (paragraph, index) {
-      if (heights[index] > 0) {
-        paragraph.style.minHeight = heights[index] + "px";
-      }
-    });
-  }
-
-  // Runs set in an Aptos font that is not installed are drawn in Calibri
-  // (or Carlito); letter spacing brings them to Aptos's average width (see
-  // Fixups.standInSpacing). Lines in Arial, the old stand-in, were 5.6%
-  // longer than Word's and Aptos documents ran pages long.
-  function matchStandInWidths(container) {
-    if (!container.querySelectorAll) {
-      return;
-    }
-    var calibri = !isNaN(installedLineHeight("Calibri")) || !isNaN(installedLineHeight("Carlito"));
-    if (!calibri) {
-      return;
-    }
-    var changes = [];
-    container.querySelectorAll("p, span").forEach(function (element) {
-      if (!hasOwnText(element)) {
-        return;
-      }
-      var family = firstFamily(getComputedStyle(element).fontFamily);
-      var spacing = Fixups.standInSpacing(family);
-      if (spacing) {
-        changes.push([element, family, spacing]);
-      }
-    });
-    // Probed before any write, so the probe lays out a clean page.
-    var missing = new Map();
-    changes.forEach(function (change) {
-      if (!missing.has(change[1])) {
-        missing.set(change[1], isNaN(installedLineHeight(change[1])));
-      }
-    });
-    changes.forEach(function (change) {
-      if (missing.get(change[1])) {
-        change[0].classList.add(lineClass("letter-spacing", change[2] + "em"));
-      }
-    });
-  }
-
-  // Line heights and line breaks as Word makes them, before pages are split.
-  function matchWordLines(container) {
-    matchStandInWidths(container);
-    fitParagraphsToRuns(container);
-    setSingleLines(container);
-    shrinkJustifiedSpaces(container);
-  }
-
-  // The header and footer of a title-page section's later pages. docx-preview
-  // renders a section's text as one page, with the first page's header and
-  // footer (Fixups.markTitleSections); the pages split from it take these
-  // instead. Each comes from rendering the section with no text and no
-  // title page.
-  function renderTitleChrome(parsed, sections, options) {
-    return sections.reduce(function (promise, props) {
-      return promise.then(function (list) {
-        var doc = Object.create(parsed);
-        var part = Object.create(parsed.documentPart);
-        part.body = Object.assign({}, parsed.documentPart.body, {
-          children: [],
-          props: Object.assign({}, props, { titlePage: false })
-        });
-        doc.documentPart = part;
-        var chromeOptions = Object.assign({}, options, {
-          ignoreFonts: true, renderFootnotes: false, renderEndnotes: false, renderComments: false
-        });
-        return window.docx.renderDocument(doc, chromeOptions).then(function (nodes) {
-          var page = null;
-          nodes.forEach(function (node) {
-            if (!page && node.querySelector) {
-              page = node.nodeName === "SECTION" ? node : node.querySelector("section");
-            }
-          });
-          list.push({
-            header: page ? childrenNamed(page, "HEADER")[0] || null : null,
-            footer: page ? childrenNamed(page, "FOOTER")[0] || null : null,
-            blobUrls: collectBlobUrls(nodes),
-            fitted: false
-          });
-          return list;
-        }, function () {
-          list.push(null);
-          return list;
-        });
-      });
-    }, Promise.resolve([]));
-  }
-
-  // Gives each page that starts a title-page section the header and footer
-  // for the pages split from it.
-  function markTitlePages(pages) {
-    var pattern = new RegExp("(?:^|\\s)" + Fixups.TITLE_SECTION + "(\\d+)(?:\\s|$)");
-    pages.forEach(function (page) {
-      var article = childrenNamed(page, "ARTICLE")[0];
-      var first = article && article.firstElementChild;
-      var match = first && pattern.exec(typeof first.className === "string" ? first.className : "");
-      var chrome = match ? titleChrome[Number(match[1])] : null;
-      if (chrome) {
-        page[CHROME] = chrome;
-      }
-    });
-  }
-
-  // A long document's pages get Word's lines when they come near the
-  // window, not all at load. Reading a paragraph's style makes the browser
-  // style its page, and doing that for every page took a 1,000-page report
-  // from 2.2 to 7.5 seconds; the pages it skips are styled only when shown
-  // (.ld-lazy). These pages are not split again (PROGRESSIVE_PAGES), so
-  // their lines move nothing else.
-  // An intersection observer finds them as the window moves; each scroll
-  // also checks the waiting pages around the window, since a test runner on
-  // a slow CI machine saw the observer miss a page scrolled to at once.
-  var nearObserver = null;
-  var nearPending = [];
-  var NEAR = "__ldNear";
-
-  function matchNearPage(page) {
-    if (!page[NEAR]) {
-      return;
-    }
-    page[NEAR] = false;
-    if (nearObserver) {
-      nearObserver.unobserve(page);
-    }
-    matchWordLines(page);
-  }
-
-  function matchWhenNear(pages) {
-    if (typeof IntersectionObserver !== "function") {
-      pages.forEach(matchWordLines);
-      return;
-    }
-    if (!nearObserver) {
-      nearObserver = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            matchNearPage(entry.target);
-          }
-        });
-      }, { root: elements.docScroller, rootMargin: "200% 0px" });
-    }
-    pages.forEach(function (page) {
-      page[NEAR] = true;
-      nearPending.push(page);
-      nearObserver.observe(page);
-    });
-  }
-
-  // Pages are in document order, so the first one near the window is found
-  // by binary search; a scroll reads a few page positions, not all of them.
-  function matchPagesNearWindow() {
-    nearPending = nearPending.filter(function (page) {
-      return page[NEAR];
-    });
-    if (!nearPending.length) {
-      return;
-    }
-    var view = elements.docScroller.getBoundingClientRect();
-    var margin = 2 * view.height;
-    var low = 0;
-    var high = nearPending.length;
-    while (low < high) {
-      var middle = (low + high) >> 1;
-      if (nearPending[middle].getBoundingClientRect().bottom < view.top - margin) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    var near = [];
-    for (var index = low; index < nearPending.length; index += 1) {
-      if (nearPending[index].getBoundingClientRect().top > view.bottom + margin) {
-        break;
-      }
-      near.push(nearPending[index]);
-    }
-    near.forEach(matchNearPage);
-  }
-
-  function stopMatchingNear() {
-    if (nearObserver) {
-      nearObserver.disconnect();
-      nearObserver = null;
-    }
-    nearPending.forEach(function (page) {
-      page[NEAR] = false;
-    });
-    nearPending = [];
-  }
-
   function attachDocument(nodes, view, serial, hyphenate) {
     clearSearch();
-    stopMatchingNear();
     root.dataset.view = view;
     elements.docBody.toggleAttribute("data-ld-hyphenate", !!hyphenate);
     revokeBlobUrls(blobUrls);
     blobUrls = collectBlobUrls(nodes);
-    titleChrome.forEach(function (chrome) {
-      blobUrls = blobUrls.concat(chrome ? chrome.blobUrls : []);
-    });
     var styles = [];
     var body = [];
     nodes.forEach(function (node) {
@@ -2229,16 +1550,12 @@
       return child.nodeName === "SECTION";
     }) : [];
     elements.docStyles.replaceChildren.apply(elements.docStyles, styles);
-    markTitlePages(pages);
     if (pages.length <= PROGRESSIVE_PAGES) {
       elements.docBody.replaceChildren.apply(elements.docBody, body);
       // Splitting measures the attached, unzoomed pages, before
       // prepareDocumentDom marks them lazy and numbers their page fields.
-      var paginate = view === "page" && pages.length;
-      if (!paginate) {
-        body.forEach(matchWordLines);
-      }
-      var paginated = paginate ? paginateMeasurable(pages, serial, body) : Promise.resolve(pages);
+      var paginated = view === "page" && pages.length
+        ? paginateMeasurable(pages, serial) : Promise.resolve(pages);
       return paginated.then(function (final) {
         if (!final) {
           return null;
@@ -2252,7 +1569,6 @@
       wrapper.removeChild(page);
     });
     elements.docBody.replaceChildren.apply(elements.docBody, body);
-    body.forEach(matchWordLines);
     prepareDocumentDom(pages.slice(0, FIRST_BATCH), 0, pages.length);
     showLoadingPages(current && current.report);
     var startTop = elements.docScroller.scrollTop;
@@ -2269,7 +1585,6 @@
           fragment.appendChild(page);
         });
         wrapper.appendChild(fragment);
-        matchWhenNear(batch);
         prepareDocumentDom(batch, FIRST_BATCH + next, pages.length);
         // Lay out this batch now. WebKit lays out pages below the window
         // only when something asks, so without this the whole document was
@@ -2953,8 +2268,7 @@
           if (node.nodeType === 1) {
             var name = node.nodeName;
             if (name === "HEADER" || name === "FOOTER" || name === "STYLE" ||
-                name === "SCRIPT" || node.hasAttribute("data-ld-repeated")) {
-              // A table's header rows repeated on later pages are found once.
+                name === "SCRIPT") {
               return NodeFilter.FILTER_REJECT;
             }
             return NodeFilter.FILTER_SKIP;
@@ -3430,7 +2744,6 @@
     }
   });
   elements.docScroller.addEventListener("scroll", scheduleOutlineUpdate, { passive: true });
-  elements.docScroller.addEventListener("scroll", matchPagesNearWindow, { passive: true });
   elements.docScroller.addEventListener("blur", function () {
     elements.docScroller.classList.remove("quiet-focus");
   });

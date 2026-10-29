@@ -182,9 +182,8 @@
     "helvetica": "\"Liberation Sans\", Arimo, sans-serif",
     "times new roman": "\"Liberation Serif\", Tinos, Times, serif",
     "courier new": "\"Liberation Mono\", Cousine, Courier, monospace",
-    "aptos": "Calibri, Carlito, sans-serif",
-    "aptos display": "Calibri, Carlito, sans-serif",
-    "aptos narrow": "Calibri, Carlito, sans-serif",
+    "aptos": "sans-serif",
+    "aptos display": "sans-serif",
     "segoe ui": "system-ui, sans-serif",
     "verdana": "\"DejaVu Sans\", sans-serif",
     "tahoma": "\"DejaVu Sans\", sans-serif",
@@ -203,66 +202,13 @@
     "andalus": "serif"
   };
 
-  // Office's cloud fonts are not installed outside Office, so the browser
-  // draws Calibri in their place (FONT_FALLBACKS). Calibri is narrower than
-  // Aptos and wider than Aptos Display and Narrow; letter spacing, in em,
-  // brings its average width to Word's. Measured in Word 365 on a 73-letter
-  // line at 12 pt (tests/reader/parity/word-widths.ps1): Aptos 388.5 pt,
-  // Aptos Display 366, Aptos Narrow 359.25, Calibri 372.
-  var STAND_IN_SPACING = {
-    "aptos": 0.0188,
-    "aptos display": -0.0068,
-    "aptos narrow": -0.0145
-  };
-
-  function standInSpacing(family) {
-    var key = String(family || "").replace(/^['"]|['"]$/g, "").trim().toLowerCase();
-    return Object.prototype.hasOwnProperty.call(STAND_IN_SPACING, key) ? STAND_IN_SPACING[key] : 0;
-  }
-
-  // Stand-ins the document's font table names (w:altName), which Word uses
-  // when a font is missing: an ACM template's Linux Libertine O names Times
-  // New Roman, and the browser had drawn the next family in the list, a
-  // Japanese one. Read by prepareModel for each document.
-  var documentFallbacks = {};
-  var GENERIC_FAMILY = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui)$/;
-
-  function readFontTable(doc) {
-    documentFallbacks = {};
-    var fonts = doc && doc.fontTablePart && doc.fontTablePart.fonts;
-    (Array.isArray(fonts) ? fonts : []).forEach(function (font) {
-      var name = font && typeof font.name === "string" ? font.name.trim().toLowerCase() : "";
-      var alt = font && typeof font.altName === "string" ? font.altName.replace(/["']/g, "").trim() : "";
-      if (name && alt && alt.toLowerCase() !== name && !FONT_FALLBACKS[name]) {
-        var known = FONT_FALLBACKS[alt.toLowerCase()];
-        documentFallbacks[name] = "\"" + alt + "\"" + (known ? ", " + known : "");
-      }
-    });
-    return Object.keys(documentFallbacks).length;
-  }
-
   function withFontFallback(value) {
     if (typeof value !== "string" || !value || /\bvar\(/.test(value) ||
         /(serif|monospace|system-ui)\s*$/.test(value)) {
       return value;
     }
-    var key = firstFamily(value);
-    var fallback = FONT_FALLBACKS[key] || documentFallbacks[key];
-    if (!fallback) {
-      return value;
-    }
-    // The fallbacks go right after the document's family, ahead of the
-    // families it lists for other scripts; a generic family goes last.
-    var families = value.split(",").map(function (family) {
-      return family.trim();
-    });
-    var named = [];
-    var generic = [];
-    fallback.split(",").forEach(function (family) {
-      family = family.trim();
-      (GENERIC_FAMILY.test(family) ? generic : named).push(family);
-    });
-    return [families[0]].concat(named, families.slice(1), generic).join(", ");
+    var fallback = FONT_FALLBACKS[firstFamily(value)];
+    return fallback ? value + ", " + fallback : value;
   }
 
   // Word stores jc="left" and jc="right" relative to the paragraph direction
@@ -582,36 +528,6 @@
     return true;
   }
 
-  // Rows the reader's pages treat as Word does: the leading rows marked
-  // w:tblHeader repeat at the top of each page a table runs onto
-  // (ld-header-row), and a row marked w:cantSplit moves whole to the next
-  // page (ld-cant-split). Other rows break across pages between lines.
-  function markRows(modelTable, xmlTable, result) {
-    var modelRows = modelChildren(modelTable, "row");
-    var xmlRows = Array.prototype.filter.call(xmlTable.children || [], function (child) {
-      return child.localName === "tr";
-    });
-    if (modelRows.length !== xmlRows.length) {
-      return;
-    }
-    var leading = true;
-    xmlRows.forEach(function (row, index) {
-      var properties = childNamed(row, "trPr");
-      var header = properties && childNamed(properties, "tblHeader");
-      var cantSplit = properties && childNamed(properties, "cantSplit");
-      if (leading && header && isOn(header)) {
-        addClass(modelRows[index], "ld-header-row");
-        result.headerRows += 1;
-      } else {
-        leading = false;
-      }
-      if (cantSplit && isOn(cantSplit)) {
-        addClass(modelRows[index], "ld-cant-split");
-        result.cantSplitRows += 1;
-      }
-    });
-  }
-
   // Pairs body paragraphs and tables of the parsed model with the XML so that
   // each rendered paragraph carries the core's index (class ld-pi-N) and each
   // table with w:bidiVisual carries ld-bidi-visual.
@@ -623,9 +539,7 @@
       paragraphs: modelParagraphs.length,
       paired: false,
       bidiVisualTables: 0,
-      borderedTables: 0,
-      headerRows: 0,
-      cantSplitRows: 0
+      borderedTables: 0
     };
     var xmlParagraphs = [];
     var xmlTables = [];
@@ -650,7 +564,6 @@
         } else if (placeTableBorders(modelTables[position], properties)) {
           result.borderedTables += 1;
         }
-        markRows(modelTables[position], table, result);
       });
     }
     return result;
@@ -678,76 +591,11 @@
   // font's ascent and descent to whole pixels: 16 px lines for 10 pt Times.
   var SINGLE_LINE = 1.152;
 
-  // A single line in Word is as tall as the font's ascent, descent and line
-  // gap, which differs by font: 1.22 times the size for Calibri and Aptos,
-  // 1.15 for Times New Roman. The reader sets --ld-line on each paragraph and
-  // run to its font's single line (wordSingleLine); without it the line is
-  // SINGLE_LINE. Spacing multiples scale that single line.
-  var SINGLE_LINE_VAR = "var(--ld-line, " + SINGLE_LINE + ")";
-
-  // Word's single-spaced line pitch over the font size, measured in Word 365
-  // at 10 and 12 pt (tests/reader/parity/word-line-pitch.ps1). Times New
-  // Roman and Arial keep SINGLE_LINE, measured on Word's PDF. Office's cloud
-  // fonts (Aptos, the default since 2023, and its family) are not installed
-  // in Windows, so the browser cannot measure them; it draws another font in
-  // their place.
-  var WORD_SINGLE_LINES = {
-    "times new roman": SINGLE_LINE,
-    "arial": SINGLE_LINE,
-    "aptos": 1.2212,
-    "aptos display": 1.22,
-    "aptos narrow": 1.2201,
-    "aptos serif": 1.3304,
-    "aptos mono": 1.22,
-    "arial nova": 1.2098,
-    "avenir next lt pro": 1.2121,
-    "bierstadt": 1.25,
-    "book antiqua": 1.2433,
-    "calibri": 1.2207,
-    "calibri light": 1.2207,
-    "cambria": 1.1731,
-    "consolas": 1.1701,
-    "courier new": 1.133,
-    "garamond": 1.125,
-    "georgia": 1.1362,
-    "grandview": 1.345,
-    "seaford": 1.4225,
-    "segoe ui": 1.3304,
-    "skeena": 1.22,
-    "tahoma": 1.2076,
-    "tenorite": 1.2475,
-    "verdana": 1.2157
-  };
-
-  // The single line for a font family: Word's measured value when known,
-  // else the browser's own measure of an installed font (which matched Word
-  // for every installed font measured), else SINGLE_LINE.
-  function wordSingleLine(family, measured) {
-    var key = String(family || "").replace(/^['"]|['"]$/g, "").trim().toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(WORD_SINGLE_LINES, key)) {
-      return WORD_SINGLE_LINES[key];
-    }
-    return measured > 0.5 && measured < 3 ? Math.round(measured * 10000) / 10000 : SINGLE_LINE;
-  }
-
-  // w:lineRule="atLeast" makes a line as tall as its text or the given
-  // height, whichever is more. docx-preview writes it as calc(100% + Npt),
-  // the font size plus the height: 10 pt text "at least 12 pt" got 22 pt
-  // lines, and a 19-page two-column paper showed as 27 pages.
-  var AT_LEAST = /^calc\(100% \+ (\d+(?:\.\d+)?)pt\)$/;
-
   function wordLineHeight(value) {
-    if (typeof value !== "string") {
+    if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) {
       return value;
     }
-    var atLeast = AT_LEAST.exec(value.trim());
-    if (atLeast) {
-      return "max(calc(" + SINGLE_LINE_VAR + " * 1em), " + atLeast[1] + "pt)";
-    }
-    if (!/^\d+(\.\d+)?$/.test(value.trim())) {
-      return value;
-    }
-    return "calc(" + SINGLE_LINE_VAR + " * " + parseFloat(value) + ")";
+    return String(Math.round(parseFloat(value) * SINGLE_LINE * 1000) / 1000);
   }
 
   function fixStyleValues(values, target) {
@@ -1027,172 +875,6 @@
     return hidden;
   }
 
-  // VML lengths in points ("466.3pt", "6in", ".4pt").
-  var VML_UNITS = { pt: 1, in: 72, px: 0.75, cm: 72 / 2.54, mm: 72 / 25.4, pc: 12 };
-
-  function vmlLength(style, name) {
-    var match = new RegExp("(?:^|;)\\s*" + name + "\\s*:\\s*(\\d*\\.?\\d+)(pt|in|px|cm|mm|pc)", "i").exec(style || "");
-    return match ? parseFloat(match[1]) * VML_UNITS[match[2].toLowerCase()] : 0;
-  }
-
-  // The w:pict elements docx-preview reads from an XML paragraph, in order:
-  // its own, and those in an mc:Fallback whose mc:Choice it cannot read.
-  function paragraphPictures(element, out) {
-    Array.prototype.forEach.call(element.children || [], function (child) {
-      if (child.localName === "pict") {
-        out.push(child);
-      } else if (child.localName === "Choice" || child.localName === "txbxContent") {
-        return;
-      } else {
-        paragraphPictures(child, out);
-      }
-    });
-    return out;
-  }
-
-  // A VML picture docx-preview cannot draw, a group (v:group) above all, came
-  // out as an empty box: the space Word gives it went missing, and the pages
-  // of a 55-page survey whose figures are VML groups held more text than
-  // Word's. Such a picture, when it sits in the line (not absolutely
-  // positioned), keeps its size as an empty drawing.
-  function reserveVmlSpace(modelBody, xmlBody) {
-    var modelParagraphs = [];
-    var xmlParagraphs = [];
-    modelBlocks(modelBody ? modelBody.children : [], modelParagraphs, []);
-    if (xmlBody) {
-      xmlBlocks(xmlBody, false, xmlParagraphs, []);
-    }
-    if (!xmlBody || xmlParagraphs.length !== modelParagraphs.length) {
-      return 0;
-    }
-    var reserved = 0;
-    modelParagraphs.forEach(function (paragraph, index) {
-      var pictures = [];
-      eachModelElement(paragraph.children || [], function (element) {
-        if (element.type === "vmlPicture") {
-          pictures.push(element);
-        }
-      });
-      if (!pictures.length) {
-        return;
-      }
-      var sources = paragraphPictures(xmlParagraphs[index], []);
-      if (sources.length !== pictures.length) {
-        return;
-      }
-      pictures.forEach(function (picture, position) {
-        if ((picture.children || []).length) {
-          return;
-        }
-        var shape = (sources[position].children || [])[0];
-        var style = shape ? getAttr(shape, "style") || "" : "";
-        var width = vmlLength(style, "width");
-        var height = vmlLength(style, "height");
-        if (/position\s*:\s*absolute/i.test(style) || !(width > 0) || !(height > 0)) {
-          return;
-        }
-        picture.children = [{
-          type: "drawing",
-          children: [],
-          cssStyle: { width: width + "pt", height: height + "pt", display: "inline-block" }
-        }];
-        reserved += 1;
-      });
-    });
-    return reserved;
-  }
-
-  // A section that sets no page size or margins (pandoc writes neither)
-  // gets Word's: a US Letter page with 1-inch margins and headers and
-  // footers half an inch from the edge, what Word showed for such a paper.
-  // Without a page height the reader had nothing to fill, and a 19-page
-  // paper showed as one long page.
-  var WORD_PAGE_SIZE = { width: "612pt", height: "792pt", orientation: null };
-  var WORD_PAGE_MARGINS = { left: "72pt", right: "72pt", top: "72pt", bottom: "72pt",
-    header: "36pt", footer: "36pt", gutter: "0pt" };
-
-  function fillPageSetup(section) {
-    if (!section) {
-      return false;
-    }
-    var filled = false;
-    var size = section.pageSize || (section.pageSize = {});
-    ["width", "height"].forEach(function (name) {
-      if (!size[name]) {
-        size[name] = WORD_PAGE_SIZE[name];
-        filled = true;
-      }
-    });
-    if (!section.pageMargins) {
-      section.pageMargins = Object.assign({}, WORD_PAGE_MARGINS);
-      filled = true;
-    }
-    return filled;
-  }
-
-  function fillDocumentPageSetup(body) {
-    if (!body) {
-      return 0;
-    }
-    var filled = 0;
-    body.props = body.props || {};
-    if (fillPageSetup(body.props)) {
-      filled += 1;
-    }
-    (body.children || []).forEach(function (block) {
-      if (block && block.type === "paragraph" && block.sectionProps && fillPageSetup(block.sectionProps)) {
-        filled += 1;
-      }
-    });
-    return filled;
-  }
-
-  // Sections with their own first-page header or footer (w:titlePg).
-  // docx-preview renders a section's text as one page, so the reader copied
-  // that first page's header and footer to every page it split from it: an
-  // ACM template's first-page footer of 17 empty lines took 46 pt from every
-  // page, and 50-page manuscripts ran two and three pages long. Marks the
-  // first block of each such section (TITLE_SECTION + index) and returns the
-  // sections' properties, from which the reader renders the header and
-  // footer of the pages after the first.
-  var TITLE_SECTION = "ld-title-section-";
-
-  function hasFirstPageChrome(props) {
-    return [props.headerRefs, props.footerRefs].some(function (refs) {
-      return (refs || []).some(function (ref) {
-        return ref && ref.type === "first";
-      });
-    });
-  }
-
-  function markTitleSections(body) {
-    var sections = [];
-    if (!body) {
-      return sections;
-    }
-    var first = null;
-    function close(props) {
-      if (first && props && props.titlePage && hasFirstPageChrome(props)) {
-        addClass(first, TITLE_SECTION + sections.length);
-        sections.push(props);
-      }
-      first = null;
-    }
-    (body.children || []).forEach(function (block) {
-      if (!block) {
-        return;
-      }
-      if (!first && (block.type === "paragraph" || block.type === "table")) {
-        first = block;
-      }
-      if (block.type === "paragraph" && block.sectionProps) {
-        close(block.sectionProps);
-      }
-    });
-    close(body.props);
-    return sections;
-  }
-
   function partRoot(part) {
     var xml = part && part._xmlDocument;
     return xml ? xml.documentElement || xml.firstElementChild : null;
@@ -1300,83 +982,6 @@
       known[id] = result;
       return result;
     };
-  }
-
-  // A paragraph property as Word resolves it: the paragraph's own pPr, then
-  // its style and the styles it is based on, then the document defaults.
-  // Returns true, false, or null when nothing sets it.
-  function paragraphFlagResolver(stylesRoot, name) {
-    var byId = {};
-    elementsNamed(stylesRoot, "style").forEach(function (style) {
-      if (getAttr(style, "type") === "paragraph") {
-        byId[getAttr(style, "styleId")] = style;
-      }
-    });
-    var defaults = stylesRoot ? childNamed(stylesRoot, "docDefaults") : null;
-    var pPrDefault = defaults ? childNamed(defaults, "pPrDefault") : null;
-    var defaultProperties = pPrDefault ? childNamed(pPrDefault, "pPr") : null;
-    var defaultFlag = defaultProperties ? childNamed(defaultProperties, name) : null;
-    var fallback = defaultFlag ? isOn(defaultFlag) : null;
-    var known = {};
-    function fromStyle(id, depth) {
-      if (Object.prototype.hasOwnProperty.call(known, id)) {
-        return known[id];
-      }
-      var style = byId[id];
-      var properties = style && childNamed(style, "pPr");
-      var flag = properties && childNamed(properties, name);
-      var base = style && childNamed(style, "basedOn");
-      var result = flag ? isOn(flag)
-        : base && depth < 32 ? fromStyle(getAttr(base, "val"), depth + 1) : fallback;
-      known[id] = result;
-      return result;
-    }
-    return function (element, styleId) {
-      var properties = childNamed(element, "pPr");
-      var flag = properties && childNamed(properties, name);
-      return flag ? isOn(flag) : fromStyle(styleId || "", 0);
-    };
-  }
-
-  // Word's page-break rules for a paragraph, as classes the pagination
-  // reads: ld-widow-off where widow and orphan control is off (Word keeps it
-  // on when nothing sets it, though the schema's default is off: a 45-page
-  // survey whose references set nothing moved a three-line reference whole
-  // rather than leave its first line at a page's foot), ld-keep-lines where
-  // the paragraph is not split, ld-keep-next where it stays with the next.
-  function markPageBreakRules(modelBody, xmlBody, stylesRoot, defaultId) {
-    var counts = { widowOff: 0, keepLines: 0, keepNext: 0 };
-    var modelParagraphs = [];
-    var xmlParagraphs = [];
-    modelBlocks(modelBody ? modelBody.children : [], modelParagraphs, []);
-    if (xmlBody) {
-      xmlBlocks(xmlBody, false, xmlParagraphs, []);
-    }
-    if (!xmlBody || xmlParagraphs.length !== modelParagraphs.length) {
-      return counts;
-    }
-    var widow = paragraphFlagResolver(stylesRoot, "widowControl");
-    var keepLines = paragraphFlagResolver(stylesRoot, "keepLines");
-    var keepNext = paragraphFlagResolver(stylesRoot, "keepNext");
-    xmlParagraphs.forEach(function (element, index) {
-      var properties = childNamed(element, "pPr");
-      var name = properties && childNamed(properties, "pStyle");
-      var style = (name && getAttr(name, "val")) || defaultId || "";
-      var model = modelParagraphs[index];
-      if (widow(element, style) === false) {
-        addClass(model, "ld-widow-off");
-        counts.widowOff += 1;
-      }
-      if (keepLines(element, style) === true) {
-        addClass(model, "ld-keep-lines");
-        counts.keepLines += 1;
-      }
-      if (keepNext(element, style) === true) {
-        addClass(model, "ld-keep-next");
-        counts.keepNext += 1;
-      }
-    });
-    return counts;
   }
 
   function neighbourParagraph(element, step) {
@@ -1521,21 +1126,7 @@
     var afterSection = false;
     var afterPageBreak = false;
     var pending = null;
-    // A section break starts a page unless the section after it is
-    // continuous. A saved start after a continuous break is where Word's
-    // text reached the bottom, as anywhere else: unmarked, the empty first
-    // part of a figure's paragraph made a page of its own in a two-column
-    // paper.
-    var nextSectionType = new Map();
-    var following = body && body.props;
-    var blocks = (body && body.children) || [];
-    for (var back = blocks.length - 1; back >= 0; back -= 1) {
-      if (blocks[back] && blocks[back].type === "paragraph" && blocks[back].sectionProps) {
-        nextSectionType.set(blocks[back], following ? following.type : undefined);
-        following = blocks[back].sectionProps;
-      }
-    }
-    blocks.forEach(function (block) {
+    ((body && body.children) || []).forEach(function (block) {
       if (pending && block && block.type === "paragraph") {
         block.children = [pending].concat(block.children || []);
       }
@@ -1549,7 +1140,7 @@
       var newSection = afterSection;
       var found = firstPageBreak(block);
       var children = block.children || [];
-      afterSection = !!block.sectionProps && nextSectionType.get(block) !== "continuous";
+      afterSection = !!block.sectionProps;
       afterPageBreak = !!found && found.kind === "page" &&
         !shows(found.inner.slice(found.at + 1).concat(children.slice(found.child + 1)));
       if (!found || found.kind !== "lastRenderedPageBreak") {
@@ -1588,14 +1179,11 @@
   function prepareModel(doc) {
     var stats = { bullets: 0, symbols: 0, paragraphs: 0, paired: false, bidiVisualTables: 0,
       noteReferences: 0, pageFields: 0, autoHyphenation: false, sectionBreakParagraphs: 0, fittedTables: 0,
-      fixedTables: 0, markSizes: 0, contextualSpacing: 0, savedPageStarts: 0, droppedPageStarts: 0,
-      widowControlOff: 0, keepLines: 0, keepNext: 0, defaultPageSetups: 0, reservedPictures: 0,
-      fontStandIns: 0 };
+      fixedTables: 0, markSizes: 0, contextualSpacing: 0, savedPageStarts: 0, droppedPageStarts: 0 };
     if (!doc) {
       return stats;
     }
     stats.autoHyphenation = documentHyphenates(doc);
-    stats.fontStandIns = readFontTable(doc);
     guardResources(doc);
     var slots = themeFontSlots(doc);
     var numberings = doc.numberingPart && doc.numberingPart.domNumberings;
@@ -1645,17 +1233,13 @@
     // reaches only its spans, so a 9 pt abstract in a 10 pt document was
     // spaced as 10 pt and ran two lines longer than Word's. A paragraph style
     // that sets a run size gives it to its paragraphs too. A style without a
-    // run size takes both sizes from its base style. The run font goes with
-    // it: an empty paragraph is a line of its mark's font, and the 17 empty
-    // lines of an ACM footer in 9 pt Linux Libertine (Times New Roman in
-    // Word) were drawn in the theme's Calibri, 0.6 pt taller each.
+    // run size takes both sizes from its base style.
     (styles || []).forEach(function (style) {
       if (!style || style.target !== "p" || !Array.isArray(style.styles)) {
         return;
       }
       var run = style.styles.filter(function (entry) {
-        return entry.target === "span" && entry.values &&
-          (entry.values["font-size"] || entry.values["font-family"]);
+        return entry.target === "span" && entry.values && entry.values["font-size"];
       })[0];
       if (!run) {
         return;
@@ -1668,11 +1252,9 @@
         style.styles.push(own);
       }
       own.values = own.values || {};
-      ["font-size", "font-family"].forEach(function (name) {
-        if (run.values[name] && !own.values[name]) {
-          own.values[name] = run.values[name];
-        }
-      });
+      if (!own.values["font-size"]) {
+        own.values["font-size"] = run.values["font-size"];
+      }
     });
 
     // docDefaults run fonts apply to spans only. Paragraphs take them too, so
@@ -1792,19 +1374,11 @@
     stats.borderedTables = annotation.borderedTables;
     stats.contextualSpacing = applyContextualSpacing(modelBody, xmlBody, partRoot(doc.stylesPart),
       defaultParagraph && defaultParagraph.id);
-    var rules = markPageBreakRules(modelBody, xmlBody, partRoot(doc.stylesPart),
-      defaultParagraph && defaultParagraph.id);
-    stats.widowControlOff = rules.widowOff;
-    stats.keepLines = rules.keepLines;
-    stats.keepNext = rules.keepNext;
-    stats.reservedPictures = reserveVmlSpace(modelBody, xmlBody);
     var saved = markSavedPageStarts(modelBody, styles);
     stats.savedPageStarts = saved.marked;
     stats.droppedPageStarts = saved.dropped;
     markNotes(doc.footnotesPart);
     stats.sectionBreakParagraphs = hideSectionBreakParagraphs(doc.documentPart && doc.documentPart.body);
-    stats.defaultPageSetups = fillDocumentPageSetup(doc.documentPart && doc.documentPart.body);
-    stats.titleSections = markTitleSections(doc.documentPart && doc.documentPart.body);
 
     // keepOrigin kept the XML only for the pairing above.
     (doc.parts || []).forEach(function (part) {
@@ -1813,22 +1387,6 @@
       }
     });
     return stats;
-  }
-
-  // Word lets the spaces of a justified line shrink to three quarters of
-  // their width before it moves a word to the next line. CSS justification
-  // only ever widens spaces, so LeanDoc put fewer words on most justified
-  // lines than Word: the owner's 45-page survey ran to 47 pages. Each run of
-  // a justified paragraph gets a negative word spacing of a quarter of its
-  // own space: the browser then breaks lines where Word does, and
-  // justification widens the spaces back to fill each line.
-  var JUSTIFY_SPACE_SHRINK = 0.25;
-
-  function justifiedWordSpacing(spaceWidth) {
-    if (!(spaceWidth > 0)) {
-      return 0;
-    }
-    return -Math.round(JUSTIFY_SPACE_SHRINK * spaceWidth * 1000) / 1000;
   }
 
   return Object.freeze({
@@ -1840,7 +1398,6 @@
     mapSymbolText: mapSymbolText,
     mapBulletText: mapBulletText,
     withFontFallback: withFontFallback,
-    standInSpacing: standInSpacing,
     logicalTextAlign: logicalTextAlign,
     mapNumberFormat: mapNumberFormat,
     classifyHref: classifyHref,
@@ -1854,13 +1411,6 @@
     guardResources: guardResources,
     EMPTY_IMAGE: EMPTY_IMAGE,
     coreParagraphIndexes: coreParagraphIndexes,
-    JUSTIFY_SPACE_SHRINK: JUSTIFY_SPACE_SHRINK,
-    markPageBreakRules: markPageBreakRules,
-    justifiedWordSpacing: justifiedWordSpacing,
-    SINGLE_LINE: SINGLE_LINE,
-    wordSingleLine: wordSingleLine,
-    TITLE_SECTION: TITLE_SECTION,
-    markTitleSections: markTitleSections,
     prepareModel: prepareModel
   });
 }));
