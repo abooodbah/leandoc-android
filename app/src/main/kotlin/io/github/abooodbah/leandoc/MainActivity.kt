@@ -132,7 +132,12 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         worker.shutdownNow()
+        // Messages the page sent just before this can still be queued on the
+        // main thread. Dropping the port first makes them no-ops instead of
+        // answers on a closed port, which throws.
+        readerReady = false
         port?.close()
+        port = null
         webView?.destroy()
         super.onDestroy()
     }
@@ -358,7 +363,14 @@ class MainActivity : Activity() {
     }
 
     private fun send(message: String) {
-        if (readerReady) port?.postMessage(WebMessage(message))
+        if (!readerReady) return
+        try {
+            port?.postMessage(WebMessage(message))
+        } catch (closed: IllegalStateException) {
+            // The page went away (renderer gone or activity closing); the
+            // replacement page asks for everything again when it is ready.
+            readerReady = false
+        }
     }
 
     private fun handleReaderMessage(message: String) {
