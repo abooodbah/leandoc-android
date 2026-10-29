@@ -298,11 +298,13 @@ jobs:
 
   screenshots:
     name: Store screenshots (${{ matrix.theme }})
-    # Only for pull requests from store branches. The images are printed to
-    # the log as base64 JPEG between markers, because artifacts cannot be
-    # fetched from where the maintainer reviews this.
+    # Only for pull requests from store branches. The PNGs are attached to
+    # the draft release "store-screenshots", which the maintainer creates
+    # by hand and deletes once the images are in store/screenshots.
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'store')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -357,14 +359,13 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: scripts/screenshots.sh ${{ matrix.theme }}
 
-      - name: Print the screenshots
+      - name: Attach the screenshots to the draft release
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           for shot in screenshots/*.png; do
             [ -f "$shot" ] || continue
-            jpeg="${shot%.png}.jpg"
-            convert "$shot" -quality 82 "$jpeg"
-            echo "=== $(basename "$jpeg") $(identify -format '%wx%h' "$jpeg") $(stat -c %s "$jpeg") bytes ==="
-            base64 -w 120 "$jpeg"
-            echo "=== end ==="
+            sha256sum "$shot"
+            gh release upload store-screenshots "$shot" --clobber -R "$GITHUB_REPOSITORY"
           done
