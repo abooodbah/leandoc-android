@@ -90,12 +90,13 @@ pss_of() {
 }
 
 renderer_pss() {
-  local total=0 pid value
-  for pid in $(adb shell ps -A -o PID,NAME | tr -d '\r' | awk '/sandboxed_process/ { print $1 }'); do
-    value=$(pss_of "$pid")
-    total=$((total + ${value:-0}))
-  done
-  echo "$total"
+  # WebView renderers are isolated processes; their PSS is read from the
+  # system-wide "Total PSS by process" list rather than by pid.
+  adb shell dumpsys meminfo | tr -d '\r' | awk '
+    /Total PSS by process:/ { inside = 1; next }
+    inside && /^ *$/ { inside = 0 }
+    inside && /sandboxed_process/ { value = $1; gsub(/[,K:]/, "", value); total += value }
+    END { print total + 0 }'
 }
 
 declare -A APP_PSS=() RENDERER_PSS=() JANK=() FRAMES=() P90=() SCREENS=()
