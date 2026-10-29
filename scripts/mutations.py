@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SUITES = {
     "jvm": (["./gradlew", "--no-daemon", "-q", "testDebugUnitTest", "--rerun-tasks"],
             "app/build/test-results/testDebugUnitTest"),
-    "device": (["./gradlew", "--no-daemon", "-q", "connectedDebugAndroidTest"],
+    "device": (["./gradlew", "--no-daemon", "-q", ":app:connectedDebugAndroidTest"],
                "app/build/outputs/androidTest-results/connected"),
 }
 

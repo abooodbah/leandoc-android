@@ -70,6 +70,48 @@ jobs:
             echo '```'
           } | tee sizes.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: What is in the APK
+        run: |
+          {
+            echo "### Release APK contents"
+            echo
+            python3 scripts/apk-contents.py app/build/outputs/apk/release/app-release.apk
+          } | tee contents.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Size on an arm64 phone
+        # What Google Play builds from the bundle for one phone: bundletool's
+        # own split APKs for an arm64-v8a, API 34, 420 dpi, English device.
+        run: |
+          curl -sSfL -o bundletool.jar https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
+          echo '{"supportedAbis":["arm64-v8a"],"supportedLocales":["en-US"],"screenDensity":420,"sdkVersion":34}' > arm64.json
+          java -jar bundletool.jar build-apks --bundle=app/build/outputs/bundle/release/app-release.aab --output=arm64.apks --device-spec=arm64.json
+          mkdir -p arm64
+          java -jar bundletool.jar extract-apks --apks=arm64.apks --device-spec=arm64.json --output-dir=arm64
+          {
+            echo "### What Google Play delivers to an arm64 phone"
+            echo
+            echo "bundletool 1.17.2, device: arm64-v8a, API 34, 420 dpi, en-US."
+            echo
+            echo "| File | Bytes |"
+            echo "| --- | ---: |"
+            for apk in arm64/*.apk; do echo "| $(basename "$apk") | $(stat -c %s "$apk") |"; done
+            echo "| **Installed APKs, total** | $(cat arm64/*.apk | wc -c) |"
+            echo
+            echo "Download size (bundletool get-size total):"
+            echo
+            echo '```'
+            java -jar bundletool.jar get-size total --apks=arm64.apks --device-spec=arm64.json
+            echo '```'
+          } | tee arm64.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Native library breakdown
+        run: |
+          {
+            echo "### arm64-v8a native library"
+            echo
+            bash scripts/native-sizes.sh
+          } | tee native.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload release build
         uses: actions/upload-artifact@v7
         with:
@@ -92,7 +134,7 @@ jobs:
         if: always()
         run: |
           python3 scripts/ci-summary.py app/build/test-results
-          cat permissions.txt sizes.md 2>/dev/null || true
+          cat permissions.txt sizes.md contents.md arm64.md native.md 2>/dev/null || true
 
   emulator:
     name: Emulator tests (API ${{ matrix.api }})
@@ -143,7 +185,7 @@ jobs:
 
       # Build before the emulator starts, so its boot time is not spent compiling.
       - name: Build the app and test APKs
-        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -158,7 +200,7 @@ jobs:
           script: |
             df -h / && free -m
             adb shell dumpsys webviewupdate | grep -iE "current webview package|valid package" | tee webview.txt
-            ./gradlew --no-daemon connectedDebugAndroidTest || { mkdir -p app/build/outputs/androidTest-results; adb logcat -d -v brief AndroidRuntime:E TestRunner:W LeanDocPage:D chromium:W '*:S' | tail -n 150 > app/build/outputs/androidTest-results/logcat.txt; exit 1; }
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || { mkdir -p app/build/outputs/androidTest-results; adb logcat -d -v brief AndroidRuntime:E TestRunner:W LeanDocPage:D chromium:W '*:S' | tail -n 150 > app/build/outputs/androidTest-results/logcat.txt; exit 1; }
 
       - name: Upload test reports
         if: always()
@@ -217,10 +259,12 @@ jobs:
 
       - name: Build this branch
         run: |
-          ./gradlew --no-daemon assembleRelease assembleDebugAndroidTest
+          ./gradlew --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest
           mkdir -p measure
           cp app/build/outputs/apk/release/app-release.apk measure/branch.apk
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk measure/fixtures.apk
+          ./gradlew --no-daemon :baseline:assembleRelease
+          cp baseline/build/outputs/apk/release/baseline-release.apk measure/empty.apk
 
       - name: Build the base branch
         run: |
@@ -244,7 +288,7 @@ jobs:
           script: |
             df -h / && free -m
             adb install -r measure/fixtures.apk
-            bash -c 'set -o pipefail; if [ -f measure/base.apk ]; then base="base=measure/base.apk"; fi; scripts/measure.sh $base branch=measure/branch.apk | tee measure/results.md'
+            bash -c 'set -o pipefail; if [ -f measure/base.apk ]; then base="base=measure/base.apk"; fi; scripts/measure.sh empty=measure/empty.apk $base branch=measure/branch.apk | tee measure/results.md'
 
       - name: Summary
         if: always()
