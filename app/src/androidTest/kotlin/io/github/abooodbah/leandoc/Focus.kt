@@ -33,15 +33,31 @@ object Focus {
         val app = instrumentation.targetContext.packageName
         val end = SystemClock.uptimeMillis() + timeoutMs
         var focus = currentFocus()
+        var nextRecovery = 0L
         while (app !in focus) {
-            if (SystemClock.uptimeMillis() > end) {
-                fail("another window has input focus, so Android would refuse the test's input: $focus")
+            val now = SystemClock.uptimeMillis()
+            if (now > end) {
+                fail("no window of the app has input focus, so Android would refuse the test's input: " + windowState())
             }
-            shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
-            bringAppToFront()
+            // Bringing the task forward starts a window transition, so it is
+            // repeated only every few seconds; focus is checked in between.
+            if (now >= nextRecovery) {
+                shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
+                bringAppToFront()
+                nextRecovery = now + 3_000
+            }
             SystemClock.sleep(250)
             focus = currentFocus()
         }
+    }
+
+    /** The focus lines of dumpsys window and the top resumed activity, for failure messages. */
+    private fun windowState(): String {
+        val window = shell("dumpsys window").lineSequence().map { it.trim() }
+            .filter { it.startsWith("mCurrentFocus=") || it.startsWith("mFocusedApp=") }.distinct().joinToString("; ")
+        val activity = shell("dumpsys activity activities").lineSequence().map { it.trim() }
+            .filter { it.startsWith("topResumedActivity=") || it.startsWith("ResumedActivity:") }.distinct().joinToString("; ")
+        return "$window; $activity"
     }
 
 

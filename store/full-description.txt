@@ -1,0 +1,27 @@
+LeanDoc is a viewer for Word documents. It is for reading, not editing: open a report, a letter or a contract that someone sent you and read it on your phone.
+
+It opens .docx files, and also templates (.dotx) and macro-enabled files (.docm, .dotm). Pages are laid out close to the way Word lays them out, with headings, lists, tables, footnotes, images stored in the file, and right-to-left text.
+
+Open a file from your file manager, from an email attachment or from your browser's downloads with "Open with", share a file to LeanDoc, or use the Open button inside the app.
+
+What it does:
+- Page view, or a reading view that fits the text to the screen
+- Find in the document
+- An outline of the headings
+- Zoom
+- Copy the document as plain text
+- Notes on anything in the file that cannot be shown exactly
+- Light and dark themes, or follow the system setting
+- Keeps your place when you rotate the phone
+- Hands the file to another app when you want to edit it
+
+Privacy:
+LeanDoc has no internet permission, so it cannot send or receive anything over the network. It asks for no permissions at all. It never runs macros, does not load images or templates from the internet that a document points to, and has no analytics, no ads and no accounts. It reads the file you open and never changes it.
+
+Limits:
+- Files up to 64 MB.
+- Old .doc files (Word 97 to 2003) and .rtf files are not shown; LeanDoc offers to open them in another app.
+- Pictures and templates linked from the internet are left out, by design.
+- The layout is close to Word's but not identical; LeanDoc says when a document uses something it cannot show.
+
+LeanDoc uses the Android System WebView that is already on your phone to draw the pages, with the same reader page as the desktop version of LeanDoc for Windows, macOS and Linux.
