@@ -24,7 +24,7 @@ LARGE=features/long-300-pages.docx
 LARGE_NAME="long-300-pages.docx"
 LARGE_TYPE=application/vnd.openxmlformats-officedocument.wordprocessingml.document
 WEBVIEW=yes
-INDEXED=no
+MEASURE_INDEXING=no
 TIMING_TAG=LeanDocTiming
 
 ROUNDS=${ROUNDS:-3}
@@ -187,7 +187,7 @@ for label in "${LABELS[@]}"; do
     open_document "$LARGE" "$LARGE_TYPE" >/dev/null
     drawn=$(fully_drawn 90)
     indexed=NA
-    if [ "$INDEXED" = yes ]; then indexed=$(indexed_ms 60); fi
+    if [ "$MEASURE_INDEXING" = yes ]; then indexed=$(indexed_ms 60); fi
     sleep 5
     app=$(pss_of "$PKG")
     renderer=0
@@ -246,7 +246,7 @@ row() {
   row "Cold start to $DRAWN_WHAT drawn, $SMALL_NAME (ms, median of $STARTS)" "${drawn[@]}"
   row "**Drawn minus the empty app's first frame** (ms)" "${drawn_net[@]}"
   row "$LARGE_NAME drawn after a cold start (ms, median of 3)" "${large[@]}"
-  if [ "$INDEXED" = yes ]; then row "Indexing all rows of $LARGE_NAME (ms, median of 3)" "${indexed[@]}"; fi
+  if [ "$MEASURE_INDEXING" = yes ]; then row "Indexing all rows of $LARGE_NAME (ms, median of 3)" "${indexed[@]}"; fi
   small_app=(); small_renderer=(); small_total=()
   for label in "${LABELS[@]}"; do
     small_app+=("${SMALL_APP[$label]:-NA}")
