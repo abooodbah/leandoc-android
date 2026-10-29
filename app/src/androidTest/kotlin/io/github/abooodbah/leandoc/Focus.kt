@@ -2,6 +2,7 @@ package io.github.abooodbah.leandoc
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.InputDevice
@@ -37,10 +38,7 @@ object Focus {
                 fail("another window has input focus, so Android would refuse the test's input: $focus")
             }
             shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
-            // Brings the app's own task back in front without a new intent,
-            // so the activity under test keeps its document.
-            instrumentation.targetContext.getSystemService(ActivityManager::class.java)
-                .appTasks.forEach { it.moveToFront() }
+            bringAppToFront()
             SystemClock.sleep(250)
             focus = currentFocus()
         }
@@ -63,6 +61,32 @@ object Focus {
             event.recycle()
         }
         if (action == MotionEvent.ACTION_UP) instrumentation.waitForIdleSync()
+    }
+
+
+    /**
+     * Moves the app's own task back in front without a new intent, so the
+     * activity under test keeps its document. An app in the background may
+     * not do that on Android 14, so from Android 10 on the call is made with
+     * the shell's permissions, which allow it.
+     */
+    private fun bringAppToFront() {
+        val manager = instrumentation.targetContext.getSystemService(ActivityManager::class.java)
+        val automation = instrumentation.uiAutomation
+        val adopted = Build.VERSION.SDK_INT >= 29
+        if (adopted) automation.adoptShellPermissionIdentity()
+        try {
+            for (task in manager.appTasks) {
+                @Suppress("DEPRECATION")
+                val id = task.taskInfo.id
+                manager.moveTaskToFront(id, 0)
+            }
+        } catch (error: SecurityException) {
+            // Below Android 10 the app has no shell permissions to borrow;
+            // the focus check then reports which window has focus.
+        } finally {
+            if (adopted) automation.dropShellPermissionIdentity()
+        }
     }
 
     private fun currentFocus(): String =
