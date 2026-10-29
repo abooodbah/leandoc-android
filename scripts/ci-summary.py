@@ -19,9 +19,16 @@ for directory in sys.argv[1:]:
             for kind in ("failure", "error"):
                 problem = case.find(kind)
                 if problem is not None:
-                    message = (problem.get("message") or "").splitlines()
-                    print(f"  FAILED {case.get('name')}: {message[0][:300] if message else ''}")
+                    text = (problem.get("message") or problem.text or "").strip().splitlines()
+                    print(f"  FAILED {case.get('name')}")
+                    for line in text[:8]:
+                        print(f"    {line[:240]}")
             if case.find("skipped") is not None:
                 print(f"  SKIPPED {case.get('name')}")
 print(f"total: {totals[0]} tests, {totals[1]} failed, {totals[2]} skipped")
+for log in sys.argv[1:]:
+    crash = pathlib.Path(log) / "logcat.txt"
+    if crash.is_file():
+        print("--- logcat (errors and the reader's console) ---")
+        print(crash.read_text(errors="replace")[-12000:])
 print("=== end of summary ===")
