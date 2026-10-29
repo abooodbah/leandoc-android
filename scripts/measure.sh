@@ -201,7 +201,17 @@ for label in "${LABELS[@]}"; do
     TOTAL_PSS[$label]+="$total"$'\n'
   done
 
-  # Scrolling: ten swipes through the large file, as a reader would.
+  # Scrolling: ten swipes through the large file, as a reader would. adb input
+  # goes to the window with focus. When the emulator's launcher has kept focus
+  # in front of the app, the swipes would miss it, so nothing is reported.
+  focus=$(adb shell dumpsys window | tr -d '\r' | grep -m 1 'mCurrentFocus=' || true)
+  if ! grep -q "$PKG" <<<"$focus"; then
+    log "$label scrolling not measured, another window has focus: $focus"
+    FRAMES[$label]="not measured"
+    JANK[$label]="not measured (app not in front)"
+    P90[$label]=NA
+    continue
+  fi
   adb shell dumpsys gfxinfo "$PKG" reset >/dev/null
   for _ in $(seq 1 10); do
     adb shell input swipe 540 1800 540 600 250
