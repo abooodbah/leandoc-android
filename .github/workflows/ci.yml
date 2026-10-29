@@ -136,6 +136,21 @@ jobs:
           python3 scripts/ci-summary.py app/build/test-results
           cat permissions.txt sizes.md contents.md arm64.md native.md 2>/dev/null || true
 
+  store-graphics:
+    name: Google Play graphics
+    # The icon, feature graphic and screenshots in store/ against Play's rules.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Test the check
+        run: python3 scripts/test_check_store_graphics.py
+
+      - name: Check the graphics
+        run: python3 scripts/check-store-graphics.py
+
   emulator:
     name: Emulator tests (API ${{ matrix.api }})
     runs-on: ubuntu-24.04

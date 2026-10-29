@@ -23,3 +23,6 @@ for name in $(cut -f1 <<<"$runs" | awk '{ print $2 }' | sort -u); do
   if [ "$actual" != "$sum" ]; then echo "$name: sha256 $actual, expected $sum" >&2; exit 1; fi
   echo "$out/$name $(stat -c %s "$out/$name") bytes, sha256 ok"
 done
+# The emulator captures 32-bit PNG with an opaque alpha channel; Play wants
+# 24-bit. This drops the alpha channel without changing a pixel.
+python3 tools/store-graphics/make.py --screenshots-only
