@@ -17,6 +17,9 @@ val uploadKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.le
 android {
     namespace = "io.github.abooodbah.leandoc"
     compileSdk = 36
+    // r28 links native code for 16 KB pages by default, which Google Play
+    // requires for apps that target Android 15 or later.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "io.github.abooodbah.leandoc"
@@ -48,6 +51,12 @@ android {
             )
             signingConfig = signingConfigs.findByName("upload")
                 ?: signingConfigs.getByName("debug")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-view="page">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; frame-src 'none'; worker-src 'none'; form-action 'none'; base-uri 'none'"
+    />
+    <title>LeanDoc</title>
+    <link rel="stylesheet" href="/reader.css" />
+    <script src="/android-host.js"></script>
+    <script src="/vendor/jszip.min.js" defer></script>
+    <script src="/vendor/docx-preview.min.js" defer></script>
+    <script src="/fixups.js" defer></script>
+    <script src="/fidelity.js" defer></script>
+    <script src="/reader.js" defer></script>
+  </head>
+  <body>
+    <header class="chrome" id="chrome">
+      <div class="topbar">
+        <div class="identity" role="group" aria-label="Current document">
+          <span class="wordmark" aria-hidden="true">LD</span>
+          <span class="file-copy">
+            <strong id="fileName">LeanDoc</strong>
+            <span id="fileMeta">Word document reader</span>
+          </span>
+        </div>
+
+        <div class="toolbar" role="toolbar" aria-label="Reader controls">
+          <label class="search-field doc-control" for="findInput">
+            <span class="visually-hidden">Find in document</span>
+            <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5 14 14" />
+            </svg>
+            <input
+              id="findInput"
+              type="search"
+              placeholder="Find"
+              autocomplete="off"
+              spellcheck="false"
+              disabled
+            />
+            <span id="findCount" aria-live="polite"></span>
+          </label>
+
+          <div class="segmented doc-control" role="group" aria-label="View">
+            <button id="viewPage" class="segment" type="button" aria-pressed="true" title="Page view (Ctrl+Shift+V)">Page</button>
+            <button id="viewReading" class="segment" type="button" aria-pressed="false" title="Reading view (Ctrl+Shift+V)">Reading</button>
+          </div>
+
+          <div class="zoom doc-control" role="group" aria-label="Zoom">
+            <button id="zoomOut" class="zoom-step" type="button" aria-label="Zoom out" title="Zoom out (Ctrl+-)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9" /></svg>
+            </button>
+            <button id="zoomValue" class="zoom-value" type="button" title="Fit width or 100% (Ctrl+0)">100%</button>
+            <button id="zoomIn" class="zoom-step" type="button" aria-label="Zoom in" title="Zoom in (Ctrl++)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" /></svg>
+            </button>
+          </div>
+
+          <button id="themeButton" class="button button-ghost" type="button">System</button>
+          <button id="editorButton" class="button button-secondary doc-control" type="button" hidden></button>
+          <button id="openButton" class="button button-primary-quiet" type="button" title="Open a document (Ctrl+O)">Open</button>
+        </div>
+      </div>
+
+      <div id="tabStrip" class="tab-strip" role="tablist" aria-label="Open documents" hidden></div>
+
+      <section id="fidelityBar" class="fidelity" aria-label="Fidelity notes" hidden>
+        <div class="fidelity-row">
+          <svg class="fidelity-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.25" />
+            <path d="M8 7.25v4M8 4.75v.5" />
+          </svg>
+          <p id="fidelityText" class="fidelity-text"></p>
+          <div class="fidelity-actions">
+            <button id="fidelityEditor" class="link-button" type="button" hidden></button>
+            <button id="fidelityDetails" class="link-button" type="button" aria-expanded="false" aria-controls="fidelityList">Details</button>
+            <button id="fidelityCollapse" class="icon-button" type="button" aria-expanded="true" aria-label="Collapse fidelity notes" title="Collapse">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg>
+            </button>
+          </div>
+        </div>
+        <ul id="fidelityList" class="fidelity-list" hidden></ul>
+      </section>
+    </header>
+
+    <div id="readerPane" class="reader" hidden>
+      <nav id="outline" class="outline" aria-label="Document outline" hidden>
+        <div class="outline-head">
+          <span class="outline-label" id="outlineLabel">Outline</span>
+          <button id="outlineToggle" class="icon-button" type="button" aria-expanded="true" aria-controls="outlineList" aria-label="Hide outline" title="Hide outline">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 4L6 8l4 4" /></svg>
+          </button>
+        </div>
+        <ol id="outlineList" class="outline-list" aria-labelledby="outlineLabel"></ol>
+      </nav>
+      <main id="docScroller" class="doc-scroller" tabindex="0" aria-label="Document">
+        <div id="docStyles" hidden></div>
+        <div id="docBody" class="doc-body" aria-busy="false"></div>
+      </main>
+    </div>
+
+    <main id="statePane" class="state-pane">
+      <div class="state-content" id="stateContent">
+        <p class="state-eyebrow" id="stateEyebrow">LeanDoc</p>
+        <h1 id="stateTitle">Read Word documents without opening an office suite.</h1>
+        <p id="stateMessage" class="state-message">
+          Open a .docx file to read it here. LeanDoc does not run macros or
+          fetch anything the document points to.
+        </p>
+        <div class="state-actions">
+          <button id="stateEditorButton" class="button button-primary" type="button" hidden></button>
+          <button id="stateOpenButton" class="button button-primary" type="button">Open a document</button>
+        </div>
+        <section id="recentSection" class="recent" aria-labelledby="recentTitle" hidden>
+          <div class="recent-head">
+            <h2 id="recentTitle">Recent</h2>
+            <button id="clearRecent" class="link-button" type="button">Clear recent</button>
+          </div>
+          <ul id="recentList" class="recent-list"></ul>
+        </section>
+      </div>
+    </main>
+
+    <div id="statusToast" class="status-toast" role="status" hidden></div>
+    <div id="liveStatus" class="visually-hidden" aria-live="polite"></div>
+  </body>
+</html>
