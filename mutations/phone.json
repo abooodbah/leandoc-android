@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Put the lowest fit zoom back to 50%",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "return Math.max(0.25, Math.min(3, available / pageWidthPixels()));",
+    "new": "return Math.max(0.5, Math.min(3, available / pageWidthPixels()));"
+  },
+  {
+    "name": "Drop the phone style",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "  document.head.appendChild(phoneStyle);\n",
+    "new": ""
+  },
+  {
+    "name": "Leave the buttons in the toolbar",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    place();\n    if (phone.addEventListener) {",
+    "new": "    if (phone.addEventListener) {"
+  },
+  {
+    "name": "Keep the wordmark",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    \" .wordmark { display: none; }\" +\n",
+    "new": ""
+  },
+  {
+    "name": "Keep the find field at its desktop width",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    \" .search-field { flex: 1 1 0; width: auto; min-width: 88px; }\" +\n",
+    "new": ""
+  },
+  {
+    "name": "Keep the desktop zoom button width",
+    "suite": "device",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    \" .zoom-step { width: 28px; }\" +\n",
+    "new": ""
+  }
+]
