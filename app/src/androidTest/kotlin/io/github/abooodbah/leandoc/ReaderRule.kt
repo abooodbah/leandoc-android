@@ -86,6 +86,7 @@ object Reader {
 
     /** A finger swipe up across the middle of the WebView, as a reader scrolls. */
     fun swipeUp(scenario: ActivityScenario<MainActivity>) {
+        Focus.ensure()
         val view = webView(scenario)
         val location = IntArray(2)
         instrumentation.runOnMainSync { view.getLocationOnScreen(location) }
