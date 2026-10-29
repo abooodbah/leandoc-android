@@ -153,6 +153,10 @@ class StoreGraphicsTest(unittest.TestCase):
         self.write("screenshots/dark.png", png(1080, 1920, color=6))
         self.assertProblem("has an alpha channel or transparency")
 
+    def test_screenshots_must_be_24_bit(self):
+        self.write("screenshots/dark.png", png(1080, 1920, color=0))
+        self.assertProblem("8-bit, needs a 24-bit PNG or JPEG")
+
     def test_screenshots_must_be_at_most_8_mb(self):
         self.write("screenshots/dark.png", png(1080, 1920, padding=8 * MB))
         self.assertProblem("needs at most 8 MB")
