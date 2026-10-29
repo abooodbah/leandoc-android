@@ -1,5 +1,6 @@
 package io.github.abooodbah.leandoc
 
+import android.app.ActivityManager
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import androidx.test.platform.app.InstrumentationRegistry
@@ -9,7 +10,8 @@ import org.junit.Assert.fail
  * Android delivers injected touches and keys to the window with input focus,
  * refuses them when that window belongs to another app, and lets only the
  * focused app read the clipboard. On a slow emulator a system dialog, such as
- * "System UI isn't responding", can take focus in the middle of a test run.
+ * "System UI isn't responding", can take focus in the middle of a test run,
+ * and the launcher can come up over the app while the emulator settles.
  * Tests call [ensure] before they touch, press keys or read the clipboard.
  */
 object Focus {
@@ -31,6 +33,10 @@ object Focus {
                 fail("another window has input focus, so Android would refuse the test's input: $focus")
             }
             shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
+            // Brings the app's own task back in front without a new intent,
+            // so the activity under test keeps its document.
+            instrumentation.targetContext.getSystemService(ActivityManager::class.java)
+                .appTasks.forEach { it.moveToFront() }
             SystemClock.sleep(250)
             focus = currentFocus()
         }
