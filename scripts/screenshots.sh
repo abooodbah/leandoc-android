@@ -25,7 +25,7 @@ demo() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" >/d
 demo enter
 demo clock -e hhmm 0900
 demo battery -e level 100 -e plugged false
-demo network -e wifi show -e level 4 -e mobile hide
+demo network -e wifi hide -e mobile hide -e airplane hide
 demo notifications -e visible false
 
 adb shell am force-stop "$PKG"
