@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The reader's own palette (reader.css), so the window and the page meet
+         without a seam in either theme. -->
+    <color name="canvas">#FAF9F7</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="ink">#1A1917</color>
+    <color name="ic_launcher_background">#1A1917</color>
+</resources>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- brand/leandoc-mark.svg from the desktop repository, without its dark
+     square, scaled into the adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.25"
+        android:scaleY="1.25"
+        android:translateX="14"
+        android:translateY="14">
+        <path
+            android:fillColor="#FAF9F7"
+            android:pathData="M15,8h25l10,10v38H15z" />
+        <path
+            android:fillColor="#E8E4DC"
+            android:pathData="M40,8v10h10z" />
+        <path
+            android:pathData="M40,8v10h10"
+            android:strokeWidth="2"
+            android:strokeColor="#D5CFC3"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M21,23h13"
+            android:strokeWidth="3.5"
+            android:strokeColor="#1D4ED8"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M21,32h23M21,38.5h23M21,45h16"
+            android:strokeWidth="2.5"
+            android:strokeColor="#1A1917"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

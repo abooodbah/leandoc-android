@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- No permissions at all. Files arrive with the read grant of the intent
+         that opened them, and nothing in the app uses the network. -->
+
+    <application
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.LeanDoc">
+
+        <!-- WebView would otherwise upload usage metrics and send page URLs to
+             Safe Browsing. The reader only ever shows its own packaged page. -->
+        <meta-data
+            android:name="android.webkit.WebView.MetricsOptOut"
+            android:value="true" />
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Word documents from file managers, mail and browsers: .docx,
+                 .dotx, .docm and .dotm. Macros in .docm and .dotm files are
+                 never run; the core removes them before the page sees the file. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.template" />
+                <data android:mimeType="application/vnd.ms-word.document.macroenabled.12" />
+                <data android:mimeType="application/vnd.ms-word.template.macroenabled.12" />
+            </intent-filter>
+
+            <!-- Some apps send Word files as generic binary or ZIP data. Match
+                 those by name only. Each pattern allows a different number of
+                 dots before the extension, because pathPattern is not greedy. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/zip" />
+                <data android:pathPattern=".*\\.docx" />
+                <data android:pathPattern=".*\\..*\\.docx" />
+                <data android:pathPattern=".*\\..*\\..*\\.docx" />
+                <data android:pathPattern=".*\\.dotx" />
+                <data android:pathPattern=".*\\..*\\.dotx" />
+                <data android:pathPattern=".*\\..*\\..*\\.dotx" />
+                <data android:pathPattern=".*\\.docm" />
+                <data android:pathPattern=".*\\..*\\.docm" />
+                <data android:pathPattern=".*\\..*\\..*\\.docm" />
+                <data android:pathPattern=".*\\.dotm" />
+                <data android:pathPattern=".*\\..*\\.dotm" />
+                <data android:pathPattern=".*\\..*\\..*\\.dotm" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.template" />
+                <data android:mimeType="application/vnd.ms-word.document.macroenabled.12" />
+                <data android:mimeType="application/vnd.ms-word.template.macroenabled.12" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
