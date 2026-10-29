@@ -91,8 +91,15 @@ class PhoneLayoutTest {
             if (!page || !area) return 'no page';
             var box = page.getBoundingClientRect();
             var frame = area.getBoundingClientRect();
-            if (box.left < frame.left - 0.5 || box.right > frame.right + 0.5) {
-              return 'the page spans ' + Math.round(box.left) + ' to ' + Math.round(box.right) +
+            // Chromium before 128 reports boxes inside a CSS-zoomed element in
+            // its unzoomed units: the page keeps its full width at any zoom.
+            // Those numbers times the zoom are where it is on screen.
+            var factor = parseFloat(page.parentElement.style.zoom) || 1;
+            var scale = factor !== 1 && Math.abs(box.width - page.offsetWidth) < 1 ? factor : 1;
+            var left = box.left * scale;
+            var right = box.right * scale;
+            if (left < frame.left - 0.5 || right > frame.right + 0.5) {
+              return 'the page spans ' + Math.round(left) + ' to ' + Math.round(right) +
                 ' in an area from ' + Math.round(frame.left) + ' to ' + Math.round(frame.right) +
                 ' at zoom ' + document.documentElement.dataset.zoom + '%';
             }
