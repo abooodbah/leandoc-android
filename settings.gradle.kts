@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "LeanDoc"
 include(":app")
+// Measured next to the app; never released. See baseline/build.gradle.kts.
+include(":baseline")

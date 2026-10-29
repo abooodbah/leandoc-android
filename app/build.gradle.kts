@@ -17,6 +17,9 @@ val uploadKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.le
 android {
     namespace = "io.github.abooodbah.leandoc"
     compileSdk = 36
+    // r28 links native code for 16 KB pages by default, which Google Play
+    // requires for apps that target Android 15 or later.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "io.github.abooodbah.leandoc"
@@ -25,6 +28,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            // No phone that runs Android 8 or later uses 32-bit x86; emulators
+            // and Chromebooks are x86_64. Leaving it out saves about 1 MB.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     signingConfigs {
@@ -48,6 +56,12 @@ android {
             )
             signingConfig = signingConfigs.findByName("upload")
                 ?: signingConfigs.getByName("debug")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 
@@ -77,6 +91,8 @@ kotlin {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // org.json is part of Android, but only as stubs in JVM tests.
+    testImplementation("org.json:json:20240303")
 
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")

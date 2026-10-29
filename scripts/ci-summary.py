@@ -14,14 +14,23 @@ for directory in sys.argv[1:]:
         failed = int(suite.get("failures", 0)) + int(suite.get("errors", 0))
         skipped = int(suite.get("skipped", 0))
         totals = [totals[0] + tests, totals[1] + failed, totals[2] + skipped]
-        print(f"{suite.get('name')}: {tests} tests, {failed} failed, {skipped} skipped")
+        # Instrumented results put every class in one file named after the
+        # first, so each failure prints its own class.
+        print(f"{path.name}: {tests} tests, {failed} failed, {skipped} skipped")
         for case in suite.iter("testcase"):
             for kind in ("failure", "error"):
                 problem = case.find(kind)
                 if problem is not None:
-                    message = (problem.get("message") or "").splitlines()
-                    print(f"  FAILED {case.get('name')}: {message[0][:300] if message else ''}")
+                    text = (problem.get("message") or problem.text or "").strip().splitlines()
+                    print(f"  FAILED {case.get('classname', '').split('.')[-1]}.{case.get('name')}")
+                    for line in text[:8]:
+                        print(f"    {line[:240]}")
             if case.find("skipped") is not None:
-                print(f"  SKIPPED {case.get('name')}")
+                print(f"  SKIPPED {case.get('classname', '').split('.')[-1]}.{case.get('name')}")
 print(f"total: {totals[0]} tests, {totals[1]} failed, {totals[2]} skipped")
+for log in sys.argv[1:]:
+    crash = pathlib.Path(log) / "logcat.txt"
+    if crash.is_file():
+        print("--- logcat (errors and the app's log) ---")
+        print(crash.read_text(errors="replace")[-12000:])
 print("=== end of summary ===")

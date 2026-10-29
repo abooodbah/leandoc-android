@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Serves the test documents as content:// URIs, the way file managers and
+         mail apps share files. It lives in the test APK only. -->
+    <application>
+        <provider
+            android:name="io.github.abooodbah.leandoc.FixtureProvider"
+            android:authorities="io.github.abooodbah.leandoc.fixtures"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+    </application>
+
+</manifest>

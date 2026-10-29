@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SUITES = {
     "jvm": (["./gradlew", "--no-daemon", "-q", "testDebugUnitTest", "--rerun-tasks"],
             "app/build/test-results/testDebugUnitTest"),
-    "device": (["./gradlew", "--no-daemon", "-q", "connectedDebugAndroidTest"],
+    "device": (["./gradlew", "--no-daemon", "-q", ":app:connectedDebugAndroidTest"],
                "app/build/outputs/androidTest-results/connected"),
 }
 
@@ -29,7 +29,7 @@ def failures(results):
         suite = ElementTree.parse(path).getroot()
         for case in suite.iter("testcase"):
             if case.find("failure") is not None or case.find("error") is not None:
-                found.append(f"{suite.get('name').split('.')[-1]}.{case.get('name')}")
+                found.append(f"{(case.get('classname') or suite.get('name')).split('.')[-1]}.{case.get('name')}")
     return found
 
 
