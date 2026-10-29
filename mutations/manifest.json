@@ -31,7 +31,7 @@
     "name": "Claim legacy .doc files",
     "suite": "jvm",
     "file": "app/src/main/AndroidManifest.xml",
-    "old": "                <data android:mimeType=\"application/vnd.ms-word.template.macroEnabled.12\" />\n            </intent-filter>\n\n            <!-- Some apps",
-    "new": "                <data android:mimeType=\"application/vnd.ms-word.template.macroEnabled.12\" />\n                <data android:mimeType=\"application/msword\" />\n            </intent-filter>\n\n            <!-- Some apps"
+    "old": "                <data android:mimeType=\"application/vnd.ms-word.template.macroenabled.12\" />\n            </intent-filter>\n\n            <!-- Some apps",
+    "new": "                <data android:mimeType=\"application/vnd.ms-word.template.macroenabled.12\" />\n                <data android:mimeType=\"application/msword\" />\n            </intent-filter>\n\n            <!-- Some apps"
   }
 ]

@@ -31,8 +31,8 @@ class LaunchTest {
         val types = listOf(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
-            "application/vnd.ms-word.document.macroEnabled.12",
-            "application/vnd.ms-word.template.macroEnabled.12",
+            "application/vnd.ms-word.document.macroenabled.12",
+            "application/vnd.ms-word.template.macroenabled.12",
         )
         for (type in types) {
             val view = Intent(Intent.ACTION_VIEW)
