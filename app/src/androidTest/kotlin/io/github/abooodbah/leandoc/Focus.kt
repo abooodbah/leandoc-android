@@ -1,8 +1,11 @@
 package io.github.abooodbah.leandoc
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.fail
 
@@ -12,7 +15,8 @@ import org.junit.Assert.fail
  * focused app read the clipboard. On a slow emulator a system dialog, such as
  * "System UI isn't responding", can take focus in the middle of a test run,
  * and the launcher can come up over the app while the emulator settles.
- * Tests call [ensure] before they touch, press keys or read the clipboard.
+ * Tests call [ensure] before they press keys or read the clipboard, and
+ * send touches with [touch].
  */
 object Focus {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
@@ -40,6 +44,25 @@ object Focus {
             SystemClock.sleep(250)
             focus = currentFocus()
         }
+    }
+
+
+    /**
+     * Delivers a touch, given in screen pixels, straight to [activity] on the
+     * main thread. It runs through the activity's own touch handling as a
+     * finger would, but does not depend on which window has input focus: on
+     * the API 34 emulator the launcher sometimes keeps focus while the app is
+     * resumed in front, and injected touches are then refused.
+     */
+    fun touch(activity: Activity, action: Int, downTime: Long, eventTime: Long, x: Float, y: Float) {
+        instrumentation.runOnMainSync {
+            val origin = IntArray(2).also { activity.window.decorView.getLocationOnScreen(it) }
+            val event = MotionEvent.obtain(downTime, eventTime, action, x - origin[0], y - origin[1], 0)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            activity.dispatchTouchEvent(event)
+            event.recycle()
+        }
+        if (action == MotionEvent.ACTION_UP) instrumentation.waitForIdleSync()
     }
 
     private fun currentFocus(): String =

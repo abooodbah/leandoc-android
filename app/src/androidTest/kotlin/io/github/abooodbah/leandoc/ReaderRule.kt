@@ -86,23 +86,25 @@ object Reader {
 
     /** A finger swipe up across the middle of the WebView, as a reader scrolls. */
     fun swipeUp(scenario: ActivityScenario<MainActivity>) {
-        Focus.ensure()
         val view = webView(scenario)
+        var activity: MainActivity? = null
+        scenario.onActivity { activity = it }
+        val target = activity!!
         val location = IntArray(2)
         instrumentation.runOnMainSync { view.getLocationOnScreen(location) }
         val x = location[0] + view.width / 2f
         val startY = location[1] + view.height * 0.8f
         val endY = location[1] + view.height * 0.2f
         val down = SystemClock.uptimeMillis()
-        instrumentation.sendPointerSync(MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, startY, 0))
+        Focus.touch(target, MotionEvent.ACTION_DOWN, down, down, x, startY)
         val steps = 12
         for (step in 1..steps) {
             val y = startY + (endY - startY) * step / steps
             val time = down + step * 10L
-            instrumentation.sendPointerSync(MotionEvent.obtain(down, time, MotionEvent.ACTION_MOVE, x, y, 0))
+            Focus.touch(target, MotionEvent.ACTION_MOVE, down, time, x, y)
         }
         val up = down + (steps + 1) * 10L
-        instrumentation.sendPointerSync(MotionEvent.obtain(down, up, MotionEvent.ACTION_UP, x, endY, 0))
+        Focus.touch(target, MotionEvent.ACTION_UP, down, up, x, endY)
     }
 
     /** Bytes the fixture provider delivered for its last stream of [path]. */
