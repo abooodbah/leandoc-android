@@ -298,13 +298,15 @@ jobs:
 
   screenshots:
     name: Store screenshots (${{ matrix.theme }})
-    # Only for pull requests from store branches. The PNGs are attached to
-    # the draft release "store-screenshots", which the maintainer creates
-    # by hand and deletes once the images are in store/screenshots.
+    # Only for pull requests from store branches. Each image is attached to
+    # check runs on the pull request's head commit as base64 parts, because
+    # artifacts cannot be fetched from where the maintainer reviews this.
+    # scripts/fetch-screenshots.sh puts them back together.
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'store')
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
+      checks: write
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -359,13 +361,28 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: scripts/screenshots.sh ${{ matrix.theme }}
 
-      - name: Attach the screenshots to the draft release
+      - name: Attach the screenshots to check runs
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           for shot in screenshots/*.png; do
             [ -f "$shot" ] || continue
-            sha256sum "$shot"
-            gh release upload store-screenshots "$shot" --clobber -R "$GITHUB_REPOSITORY"
+            name=$(basename "$shot")
+            sum=$(sha256sum "$shot" | cut -d' ' -f1)
+            echo "$name $(stat -c %s "$shot") bytes, sha256 $sum"
+            rm -f part.*
+            base64 -w0 "$shot" | split -b 60000 -d -a 2 - part.
+            count=$(ls part.* | wc -l)
+            index=0
+            for part in part.*; do
+              index=$((index + 1))
+              gh api "repos/$GITHUB_REPOSITORY/check-runs" --silent \
+                -f name="screenshot $name $index/$count" -f head_sha="$HEAD_SHA" \
+                -f status=completed -f conclusion=neutral \
+                -f "output[title]=$name part $index of $count" \
+                -f "output[summary]=sha256 $sum" \
+                -F "output[text]=@$part"
+            done
           done
