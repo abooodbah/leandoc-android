@@ -1,0 +1,1 @@
+Read Word documents offline. Never runs macros. No network access at all

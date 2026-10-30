@@ -1,0 +1,1 @@
+A Letter or A4 page now fits the screen width when a document opens. Before, the right edge was cut off until you zoomed out. Use the zoom buttons to enlarge the text. On a phone the theme, other-app and Open buttons now sit beside the file name, so the controls take two rows on most screens.
