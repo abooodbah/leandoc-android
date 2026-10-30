@@ -47,8 +47,10 @@ are never run.
 
 ## Signing for Google Play
 
-Release builds from CI are signed with a throwaway debug key, so they install
-for testing. Google Play needs a bundle signed with your own upload key. The
+Release APKs attached to GitHub releases are signed with the maintainer's
+release key, which stays the same from version to version. A local release
+build without a key comes out unsigned. Google Play needs a bundle signed with
+your own upload key. The
 key stays on your computer: never commit it, and never put its password in
 this repository. `.gitignore` already excludes `*.jks`, `*.keystore` and
 `keystore.properties`.

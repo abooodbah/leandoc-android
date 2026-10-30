@@ -1,0 +1,1 @@
+The APKs on GitHub are now signed with a stable key, so later versions install as updates. If you installed an earlier APK from GitHub, uninstall it once before installing this one. The app itself is unchanged. No permissions and no network.
