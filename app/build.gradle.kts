@@ -6,13 +6,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// The upload key stays on the maintainer's machine. keystore.properties and
+// The signing key stays on the maintainer's machine. keystore.properties and
 // every keystore file are ignored by git; see "Signing for Google Play" in the
-// README. Without the file, release builds are signed with the debug key so
-// they can still be installed for testing.
+// README. CI writes the file from repository secrets: the upload key for the
+// Play bundle, the release key for the GitHub release. Without the file, release
+// builds come out unsigned, which is what F-Droid expects. Pass
+// -PdebugSignRelease to sign them with the debug key instead, so they install
+// for testing (CI does this for its emulator measurements).
 val uploadKey = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
     Properties().apply { file.inputStream().use { load(it) } }
 }
+val debugSignRelease = providers.gradleProperty("debugSignRelease").isPresent
 
 android {
     namespace = "io.github.abooodbah.leandoc"
@@ -54,8 +58,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.findByName("upload")
-                ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("upload") ?: signingConfigs.getByName("debug").takeIf { debugSignRelease }
         }
     }
 
@@ -76,6 +79,14 @@ android {
         // Reports go to the CI artifact so a failure can be read without a rerun.
         htmlReport = true
         xmlReport = false
+    }
+
+    // The dependency list that AGP encrypts for Google Play is kept out of the APK,
+    // where IzzyOnDroid flags it as an unreadable blob, and kept in the Play
+    // bundle.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
     }
 
     testOptions {
