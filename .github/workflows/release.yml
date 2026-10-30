@@ -83,10 +83,13 @@ jobs:
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
           apk=app/build/outputs/apk/release/app-release.apk
           "$apksigner" verify --print-certs "$apk" > apk-signer.txt
-          grep -E '^Signer #[0-9]+ certificate (DN|SHA-256 digest):' apk-signer.txt || true
+          # Certificates are public; print them all. apksigner names signers either
+          # "Signer #1" or "Signer (minSdkVersion=..., maxSdkVersion=...)".
+          cat apk-signer.txt
           if grep -q 'CN=Android Debug' apk-signer.txt; then echo "::error::The release APK is signed with the debug key."; exit 1; fi
-          if [ "$(grep -c '^Signer #[0-9]* certificate DN:' apk-signer.txt)" != 1 ]; then echo "::error::The release APK must have exactly one signer."; exit 1; fi
-          got="$(grep -m1 '^Signer #1 certificate SHA-256 digest:' apk-signer.txt | sed 's/.*digest:[[:space:]]*//' | tr -d ':[:space:]' | tr 'A-F' 'a-f' || true)"
+          digests="$(grep -E '^Signer.* certificate SHA-256 digest:' apk-signer.txt | sed 's/.*digest:[[:space:]]*//' | tr -d ': \t\r' | tr 'A-F' 'a-f' | sort -u || true)"
+          if [ "$(printf '%s' "$digests" | grep -c .)" != 1 ]; then echo "::error::The release APK must be signed by exactly one certificate."; exit 1; fi
+          got="$digests"
           if [ "$got" != "$want" ]; then echo "::error::The release APK is signed with $got, not the release certificate $want."; exit 1; fi
           aab=app/build/outputs/bundle/release/app-release.aab
           keytool -printcert -jarfile "$aab" > aab-signer.txt
