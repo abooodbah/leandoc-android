@@ -3,6 +3,14 @@ name: Release files
 # Builds the files for a GitHub release that already exists (it is created
 # by hand, under the maintainer's account) and attaches them with their
 # SHA-256 sums. Run it from the Actions tab or the API with the tag name.
+#
+# The release APK and bundle are signed with the maintainer's release key,
+# which is separate from the Google Play upload key. The key and its
+# password come from repository secrets (RELEASE_KEYSTORE_BASE64,
+# RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS). The repository variable
+# RELEASE_CERT_SHA256 holds the certificate's SHA-256 fingerprint, and the
+# run fails if the files are signed with any other certificate. Secrets are
+# not given to workflows started from forks.
 
 on:
   workflow_dispatch:
@@ -34,8 +42,59 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Write the release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          EXPECTED_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS; do
+            if [ -z "${!name}" ]; then echo "::error::Secret for $name is not set. Run Create-ReleaseKeys.ps1 first."; exit 1; fi
+          done
+          if [ -z "$EXPECTED_SHA256" ]; then echo "::error::Repository variable RELEASE_CERT_SHA256 is not set. Run Create-ReleaseKeys.ps1 first."; exit 1; fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEYSTORE_PASSWORD"
+          } > keystore.properties
+          # The key in the secret must be the one whose fingerprint is pinned.
+          keytool -list -v -keystore "$RUNNER_TEMP/release.jks" -storetype PKCS12 \
+            -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" > "$RUNNER_TEMP/key.txt"
+          key_sha256="$(grep -m1 -E '^[[:space:]]*SHA256:' "$RUNNER_TEMP/key.txt" | sed 's/.*SHA256:[[:space:]]*//' | tr -d ':[:space:]' | tr 'A-F' 'a-f' || true)"
+          want="$(printf '%s' "$EXPECTED_SHA256" | tr -d ':[:space:]' | tr 'A-F' 'a-f')"
+          rm -f "$RUNNER_TEMP/key.txt"
+          if [ "$key_sha256" != "$want" ]; then
+            echo "::error::The key in RELEASE_KEYSTORE_BASE64 ($key_sha256) is not the pinned release certificate ($want)."
+            exit 1
+          fi
+          echo "Release certificate SHA-256: $key_sha256"
+
       - name: Build
         run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease :app:assembleDebug :baseline:assembleRelease
+
+      - name: Check the signer
+        env:
+          EXPECTED_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          want="$(printf '%s' "$EXPECTED_SHA256" | tr -d ':[:space:]' | tr 'A-F' 'a-f')"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$apksigner" verify --print-certs "$apk" > apk-signer.txt
+          grep -E '^Signer #[0-9]+ certificate (DN|SHA-256 digest):' apk-signer.txt || true
+          if grep -q 'CN=Android Debug' apk-signer.txt; then echo "::error::The release APK is signed with the debug key."; exit 1; fi
+          if [ "$(grep -c '^Signer #[0-9]* certificate DN:' apk-signer.txt)" != 1 ]; then echo "::error::The release APK must have exactly one signer."; exit 1; fi
+          got="$(grep -m1 '^Signer #1 certificate SHA-256 digest:' apk-signer.txt | sed 's/.*digest:[[:space:]]*//' | tr -d ':[:space:]' | tr 'A-F' 'a-f' || true)"
+          if [ "$got" != "$want" ]; then echo "::error::The release APK is signed with $got, not the release certificate $want."; exit 1; fi
+          aab=app/build/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile "$aab" > aab-signer.txt
+          grep -E '^(Owner|[[:space:]]*SHA256):' aab-signer.txt || true
+          if grep -q 'CN=Android Debug' aab-signer.txt; then echo "::error::The bundle is signed with the debug key."; exit 1; fi
+          got="$(grep -m1 -E '^[[:space:]]*SHA256:' aab-signer.txt | sed 's/.*SHA256:[[:space:]]*//' | tr -d ':[:space:]' | tr 'A-F' 'a-f' || true)"
+          if [ "$got" != "$want" ]; then echo "::error::The bundle is signed with $got, not the release certificate $want."; exit 1; fi
+          rm -f apk-signer.txt aab-signer.txt
 
       - name: Name, collect and hash
         env:
@@ -56,3 +115,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ inputs.tag }}" dist/* --clobber
+
+      - name: Remove the key
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/key.txt"
