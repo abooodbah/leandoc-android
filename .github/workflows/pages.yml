@@ -1,0 +1,79 @@
+name: Deploy GitHub Pages
+
+# Deploys site/ when it changes on main, and by hand. A pull request that
+# touches site/ runs the validator only; it never deploys.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # The upload step takes ./site wholesale, so anything under it must
+      # redeploy, or the live page lags main.
+      - 'site/**'
+      # The deployment definition itself, so a correction deploys under its
+      # own new rules.
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Validate site
+        shell: bash
+        run: |
+          if [[ ! -f site/index.html ]]; then
+            echo "::error title=No site::site/index.html does not exist on this ref; nothing to deploy."
+            exit 1
+          fi
+          node site/validate.mjs
+
+  deploy:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

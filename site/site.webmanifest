@@ -1,0 +1,16 @@
+{
+  "name": "LeanDoc for Android",
+  "short_name": "LeanDoc",
+  "description": "A read-only Word document viewer for Android, in a closed test on Google Play.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#faf9f7",
+  "theme_color": "#1a1917",
+  "icons": [
+    {
+      "src": "assets/leandoc-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
