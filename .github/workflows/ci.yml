@@ -34,7 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
 
       - name: Lint, unit tests, release APK and bundle
-        run: ./gradlew --no-daemon lint testDebugUnitTest assembleRelease bundleRelease
+        run: ./gradlew --no-daemon -PdebugSignRelease lint testDebugUnitTest assembleRelease bundleRelease
 
       - name: Desktop core tests on the shipped copy of the core
         run: |
@@ -274,7 +274,7 @@ jobs:
 
       - name: Build this branch
         run: |
-          ./gradlew --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest
+          ./gradlew --no-daemon -PdebugSignRelease :app:assembleRelease :app:assembleDebugAndroidTest
           mkdir -p measure
           cp app/build/outputs/apk/release/app-release.apk measure/branch.apk
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk measure/fixtures.apk
@@ -284,7 +284,7 @@ jobs:
       - name: Build the base branch
         run: |
           git worktree add ../base "origin/${{ github.base_ref }}"
-          if (cd ../base && ./gradlew --no-daemon assembleRelease); then
+          if (cd ../base && ./gradlew --no-daemon -PdebugSignRelease assembleRelease); then
             cp ../base/app/build/outputs/apk/release/app-release.apk measure/base.apk
           else
             echo "The base branch does not build a release APK."
