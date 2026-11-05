@@ -55,6 +55,9 @@ class ReaderAssetsTest {
         val firstScript = page.indexOf("""<script src="/vendor/jszip.min.js" defer></script>""")
         assertTrue("bridge script present", bridge > 0)
         assertTrue("bridge runs before every other script", bridge < firstScript)
+        val desktopStyle = page.indexOf("""<link rel="stylesheet" href="/reader.css" />""")
+        val androidStyle = page.indexOf("""<link rel="stylesheet" href="/android.css" />""")
+        assertTrue("Android's stylesheet comes after the desktop's", androidStyle > desktopStyle && desktopStyle > 0)
         // The desktop policy stays in force: no frames, objects or workers, and
         // fetch only from the page's own origin (the package).
         assertTrue(page.contains("default-src 'none'"))
