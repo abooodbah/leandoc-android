@@ -27,9 +27,11 @@ grep -qF "$fit" "$assets/reader.js"
 sed -i 's|return Math.max(0.5, Math.min(3, available / pageWidthPixels()));|return Math.max(0.25, Math.min(3, available / pageWidthPixels()));|' \
   "$assets/reader.js"
 grep -qF 'return Math.max(0.25, Math.min(3, available / pageWidthPixels()));' "$assets/reader.js"
-# The only change to the desktop page: load the Android bridge first.
-sed 's|^    <link rel="stylesheet" href="/reader.css" />$|&\n    <script src="/android-host.js"></script>|' \
+# The only change to the desktop page: Android's stylesheet after the
+# desktop's, and the Android bridge before every script.
+sed 's|^    <link rel="stylesheet" href="/reader.css" />$|&\n    <link rel="stylesheet" href="/android.css" />\n    <script src="/android-host.js"></script>|' \
   "$desktop/assets/reader.html" > "$assets/reader.html"
+grep -q 'href="/android.css"' "$assets/reader.html"
 grep -q 'src="/android-host.js"' "$assets/reader.html"
 cp "$modules/jszip/dist/jszip.min.js" "$modules/docx-preview/dist/docx-preview.min.js" "$assets/vendor/"
 for font in \
@@ -66,6 +68,6 @@ cd "$here"
   find app/src/main/assets/reader app/src/main/cpp/core app/src/main/cpp/miniz \
     app/src/main/cpp/pugixml native-tests/CoreTests.cpp native-tests/TestZip.cpp \
     native-tests/TestZip.h app/src/androidTest/assets/fixtures \
-    -type f ! -name android-host.js | LC_ALL=C sort | xargs sha256sum
+    -type f ! -name android-host.js ! -name android.css | LC_ALL=C sort | xargs sha256sum
 } > third_party/reader-assets.sha256
 echo "Updated. Review the diff, then run the tests."
