@@ -9,7 +9,8 @@
 # emulator without a GPU even an empty app takes over a second. Builds take
 # turns, so drift in the emulator affects both alike. Every number comes from
 # am start -W, the "Fully drawn" line the app logs through reportFullyDrawn(),
-# dumpsys meminfo and dumpsys gfxinfo.
+# the action times the page reports (android-host.js), dumpsys meminfo and
+# dumpsys gfxinfo.
 set -euo pipefail
 
 PKG=io.github.abooodbah.leandoc
@@ -23,6 +24,11 @@ DRAWN_WHAT=document
 LARGE=features/long-300-pages.docx
 LARGE_NAME="long-300-pages.docx"
 LARGE_TYPE=application/vnd.openxmlformats-officedocument.wordprocessingml.document
+# A valid 24 MB document with two photo-sized pictures, made by the test APK's
+# fixture provider.
+BIG=large-photos.docx
+BIG_NAME="large-photos.docx (24 MB)"
+BIG_TYPE=application/vnd.openxmlformats-officedocument.wordprocessingml.document
 WEBVIEW=yes
 MEASURE_INDEXING=no
 TIMING_TAG=LeanDocTiming
@@ -136,6 +142,11 @@ pss_of() {
     awk '/TOTAL PSS:/ { print $3; exit } /^ *TOTAL +[0-9]/ { print $2; exit }'
 }
 
+java_heap_of() {
+  # "Java Heap:" in the App Summary, in KB.
+  adb shell dumpsys meminfo "$1" | tr -d '\r' | awk '/^ *Java Heap:/ { print $3; exit }'
+}
+
 renderer_pss() {
   # WebView renderers are isolated processes; their PSS is read from the
   # system-wide "Total PSS by process" list rather than by pid.
@@ -176,9 +187,24 @@ for label in "${LABELS[@]}"; do
   log "$label small file: app ${SMALL_APP[$label]:-NA} KB, renderer ${SMALL_RENDERER[$label]} KB in $(renderer_count) renderer process(es)"
 done
 
-# The fixture provider writes generated files into its cache the first time.
-open_document "$LARGE" "$LARGE_TYPE" >/dev/null
-sleep 20
+# Memory with a large valid document: what the app and the renderer keep.
+# The fixture provider makes the file into its cache the first time.
+open_document "$BIG" "$BIG_TYPE" >/dev/null
+fully_drawn 120 >/dev/null
+sleep 5
+declare -A BIG_APP=() BIG_JAVA=() BIG_TOTAL=() BIG_DRAWN=()
+for label in "${LABELS[@]}"; do
+  install "$label"
+  open_document "$BIG" "$BIG_TYPE" >/dev/null
+  BIG_DRAWN[$label]=$(fully_drawn 120)
+  sleep 8
+  BIG_APP[$label]=$(pss_of "$PKG")
+  BIG_JAVA[$label]=$(java_heap_of "$PKG")
+  renderer=0
+  if [ "$WEBVIEW" = yes ]; then renderer=$(renderer_pss); fi
+  BIG_TOTAL[$label]=$(plus "${BIG_APP[$label]:-NA}" "$renderer")
+  log "$label big file: drawn ${BIG_DRAWN[$label]} ms, app ${BIG_APP[$label]:-NA} KB, Java heap ${BIG_JAVA[$label]:-NA} KB, renderer $renderer KB"
+done
 
 declare -A APP_PSS=() RENDERER_PSS=() TOTAL_PSS=() LARGE_DRAWN=() INDEXED=() JANK=() FRAMES=() P90=()
 for label in "${LABELS[@]}"; do
@@ -222,6 +248,87 @@ for label in "${LABELS[@]}"; do
   JANK[$label]=$(sed -n 's/^Janky frames: *//p' <<<"$gfx" | head -n 1)
   P90[$label]=$(sed -n 's/^90th percentile: *//p' <<<"$gfx" | head -n 1)
   log "$label scrolling: frames ${FRAMES[$label]:-NA}, janky ${JANK[$label]:-NA}, p90 ${P90[$label]:-NA}"
+done
+
+# Reader actions on the large document, as keys from a hardware keyboard:
+# each time is what the page reports from the key (or typed letter) to the
+# frame that shows the result. View switches use the reader's own render
+# time. The app's data is cleared first, so every build starts in the System
+# theme, page view and automatic zoom.
+timing_lines() {
+  adb logcat -d -v raw -s "$TIMING_TAG:I" | tr -d '\r'
+}
+
+action_ms() {
+  sed -n "s/^action $1 \([0-9][0-9]*\) ms$/\1/p"
+}
+
+key() {
+  adb shell input keycombination "$@" >/dev/null 2>&1 || log "input keycombination $* failed"
+}
+
+wait_renders() {
+  local want=$1
+  for _ in $(seq 1 600); do
+    if [ "$(timing_lines | grep -c '^rendered ')" -ge "$want" ]; then return; fi
+    sleep 0.1
+  done
+}
+
+declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=()
+for label in "${LABELS[@]}"; do
+  install "$label"
+  adb shell pm clear "$PKG" >/dev/null || log "pm clear failed"
+  open_document "$LARGE" "$LARGE_TYPE" >/dev/null
+  fully_drawn 90 >/dev/null
+  sleep 5
+  focus=$(adb shell dumpsys window | tr -d '\r' | grep -m 1 'mCurrentFocus=' || true)
+  if ! grep -q "$PKG" <<<"$focus"; then
+    log "$label actions not measured, another window has focus: $focus"
+    continue
+  fi
+  adb logcat -c
+  for keys in "KEYCODE_EQUALS" "KEYCODE_EQUALS" "KEYCODE_MINUS" "KEYCODE_MINUS"; do
+    key KEYCODE_CTRL_LEFT $keys
+    sleep 3
+  done
+  ZOOM_MS[$label]=$(timing_lines | action_ms zoom | median)
+  # Back to the automatic zoom, which follows a rotation.
+  key KEYCODE_CTRL_LEFT KEYCODE_0
+  sleep 3
+  adb logcat -c
+  for _ in 1 2 3; do
+    key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_T
+    sleep 3
+  done
+  THEME_MS[$label]=$(timing_lines | action_ms theme | median)
+  key KEYCODE_CTRL_LEFT KEYCODE_F
+  sleep 2
+  adb logcat -c
+  for letter in s e c t i o n; do
+    adb shell input text "$letter" || log "input text failed"
+    sleep 2
+  done
+  FIND_MS[$label]=$(timing_lines | action_ms find | median)
+  FIND_MAX[$label]=$(timing_lines | action_ms find | sort -n | tail -n 1)
+  adb shell input keyevent KEYCODE_ESCAPE || true
+  sleep 2
+  adb logcat -c
+  key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_V
+  wait_renders 1
+  sleep 3
+  key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_V
+  wait_renders 2
+  VIEW_MS[$label]=$(timing_lines | sed -n 's/^rendered [0-9]* pages in \([0-9][0-9]*\) ms$/\1/p' | median)
+  sleep 3
+  adb shell settings put system accelerometer_rotation 0
+  adb logcat -c
+  adb shell settings put system user_rotation 1
+  sleep 6
+  adb shell settings put system user_rotation 0
+  sleep 6
+  RESIZE_MS[$label]=$(timing_lines | action_ms resize | median)
+  log "$label actions: zoom ${ZOOM_MS[$label]:-NA} ms, theme ${THEME_MS[$label]:-NA} ms, find ${FIND_MS[$label]:-NA} ms (max ${FIND_MAX[$label]:-NA}), view ${VIEW_MS[$label]:-NA} ms, rotation ${RESIZE_MS[$label]:-NA} ms"
 done
 
 row() {
@@ -273,6 +380,27 @@ row() {
     row "WebView renderer PSS after $LARGE_NAME (KB, median of 3)" "${renderer[@]}"
     row "**Total PSS, app and renderer** (KB, median of 3)" "${total[@]}"
   fi
+  big_app=(); big_java=(); big_total=(); big_drawn=()
+  zoom=(); theme=(); find=(); find_max=(); view=(); resize=()
+  for label in "${LABELS[@]}"; do
+    big_app+=("${BIG_APP[$label]:-NA}"); big_java+=("${BIG_JAVA[$label]:-NA}")
+    big_total+=("${BIG_TOTAL[$label]:-NA}"); big_drawn+=("${BIG_DRAWN[$label]:-NA}")
+    zoom+=("${ZOOM_MS[$label]:-NA}"); theme+=("${THEME_MS[$label]:-NA}")
+    find+=("${FIND_MS[$label]:-NA}"); find_max+=("${FIND_MAX[$label]:-NA}")
+    view+=("${VIEW_MS[$label]:-NA}"); resize+=("${RESIZE_MS[$label]:-NA}")
+  done
+  row "$BIG_NAME drawn after a cold start (ms)" "${big_drawn[@]}"
+  row "App process PSS after $BIG_NAME (KB)" "${big_app[@]}"
+  row "App Java heap after $BIG_NAME (KB)" "${big_java[@]}"
+  if [ "$WEBVIEW" = yes ]; then
+    row "**Total PSS after $BIG_NAME, app and renderer** (KB)" "${big_total[@]}"
+  fi
+  row "Zoom step on $LARGE_NAME (ms to the frame, median of 4)" "${zoom[@]}"
+  row "Theme switch on $LARGE_NAME (ms to the frame, median of 3)" "${theme[@]}"
+  row "Find, one typed letter, $LARGE_NAME (ms to the frame, median of 7)" "${find[@]}"
+  row "Find, slowest letter of the 7 (ms)" "${find_max[@]}"
+  row "View switch on $LARGE_NAME (render ms, median of 2)" "${view[@]}"
+  row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 2)" "${resize[@]}"
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
   row "90th percentile frame time (software GPU, not a budget check)" "${p90[@]}"

@@ -177,6 +177,16 @@ class ReaderTest {
     }
 
     @Test
+    fun aLargeDocumentWithPhotosOpens() {
+        Reader.open(FixtureProvider.LARGE_PHOTOS).use { scenario ->
+            Reader.waitForDocument(scenario, timeoutMs = 120_000)
+            assertTrue(bodyText(scenario).contains("Inline images"))
+            assertEquals(3L, Reader.js(scenario, "document.querySelectorAll('#docBody img').length").asLong())
+            assertTrue(Reader.text(scenario, "#fileMeta").orEmpty().contains("MB"))
+        }
+    }
+
+    @Test
     fun readingViewReflowsTheDocument() {
         Reader.open("features/styles.docx").use { scenario ->
             Reader.waitForDocument(scenario)

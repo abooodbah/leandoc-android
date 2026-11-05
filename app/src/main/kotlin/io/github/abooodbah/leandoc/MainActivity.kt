@@ -53,7 +53,7 @@ class MainActivity : Activity() {
     private val phases = HashSet<String>()
 
     private fun phase(name: String) {
-        if (phases.add(name)) Log.i("LeanDocTiming", "phase $name ${SystemClock.uptimeMillis() - createdAt} ms")
+        if (phases.add(name)) Log.i(TIMING, "phase $name ${SystemClock.uptimeMillis() - createdAt} ms")
     }
 
 
@@ -408,8 +408,12 @@ class MainActivity : Activity() {
                 prefs.edit().putString(KEY_VIEW, readerView).apply()
             }
             is ReaderCommand.Link -> followLink(command.href)
-            is ReaderCommand.Rendered -> if (awaitingFirstRender && command.generation == generation) reportDrawn()
+            is ReaderCommand.Rendered -> {
+                Log.i(TIMING, "rendered ${command.pages} pages in ${command.ms} ms")
+                if (awaitingFirstRender && command.generation == generation) reportDrawn()
+            }
             is ReaderCommand.RenderFailed -> if (awaitingFirstRender) reportDrawn()
+            is ReaderCommand.Timing -> Log.i(TIMING, "action ${command.action} ${command.ms} ms")
         }
     }
 
@@ -581,6 +585,7 @@ class MainActivity : Activity() {
 
     private companion object {
         const val PREFERENCES = "reader"
+        const val TIMING = "LeanDocTiming"
         const val KEY_THEME = "theme"
         const val KEY_VIEW = "view"
         const val STATE_URI = "document"

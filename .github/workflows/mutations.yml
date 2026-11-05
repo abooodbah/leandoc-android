@@ -11,6 +11,10 @@ on:
         description: Mutation list
         required: true
         default: mutations/manifest.json
+      suite:
+        description: Which suites to run (jvm, device or both)
+        required: false
+        default: both
 
 permissions:
   contents: read
@@ -18,6 +22,7 @@ permissions:
 jobs:
   jvm:
     name: JVM mutations
+    if: inputs.suite != 'device'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -37,6 +42,7 @@ jobs:
 
   device:
     name: Device mutations (API 34)
+    if: inputs.suite != 'jvm'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:

@@ -8,18 +8,33 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.CRC32;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Serves the desktop app's test documents through pipes, as many real
  * providers do, so the app cannot rely on seeking or on a file path. The path
  * is the fixture path, for example features/styles.docx. Names ending in
  * "-nosize" report no size; "huge.docx" streams 65 MiB of zeros, as a broken
- * download would.
+ * download would. "large-photos.docx" is features/images.docx with two of
+ * its pictures replaced by photo-sized noise images, about 24 MB in all, the
+ * size of a report full of phone photos; it is made once into the cache.
  *
  * <p>Written in Java on purpose: Android runs this provider in the test
  * package's own process, where the Kotlin standard library is missing because
@@ -30,6 +45,11 @@ public final class FixtureProvider extends ContentProvider {
 
     /** One MiB past the app's 64 MiB limit. */
     public static final long HUGE_BYTES = 65L * 1024 * 1024;
+
+    /** A valid document of about 24 MB; see the class comment. */
+    public static final String LARGE_PHOTOS = "large-photos.docx";
+    private static final int PHOTO_WIDTH = 2800;
+    private static final int PHOTO_HEIGHT = 1400;
 
     private static final ConcurrentHashMap<String, Long> WRITTEN = new ConcurrentHashMap<>();
 
@@ -145,10 +165,80 @@ public final class FixtureProvider extends ContentProvider {
             for (long sent = 0; sent < HUGE_BYTES; sent += buffer.length) out.write(buffer, buffer.length);
             return;
         }
-        try (InputStream input = getContext().getAssets().open("fixtures/" + clean)) {
+        try (InputStream input = clean.equals(LARGE_PHOTOS)
+                ? new FileInputStream(largePhotos())
+                : getContext().getAssets().open("fixtures/" + clean)) {
             int read;
             while ((read = input.read(buffer)) >= 0) out.write(buffer, read);
         }
+    }
+
+    private synchronized File largePhotos() throws IOException {
+        File file = new File(getContext().getCacheDir(), LARGE_PHOTOS);
+        if (file.isFile()) return file;
+        File partial = new File(getContext().getCacheDir(), LARGE_PHOTOS + ".part");
+        Random random = new Random(20261105L);
+        try (ZipInputStream in = new ZipInputStream(getContext().getAssets().open("fixtures/features/images.docx"));
+             ZipOutputStream out = new ZipOutputStream(new FileOutputStream(partial))) {
+            byte[] buffer = new byte[64 * 1024];
+            for (ZipEntry entry; (entry = in.getNextEntry()) != null; ) {
+                String name = entry.getName();
+                boolean photo = name.equals("word/media/image1.png") || name.equals("word/media/image3.png");
+                // Noise does not compress; storing it saves the work of trying.
+                out.setLevel(photo ? Deflater.NO_COMPRESSION : Deflater.DEFAULT_COMPRESSION);
+                out.putNextEntry(new ZipEntry(name));
+                if (photo) {
+                    writeNoisePng(out, PHOTO_WIDTH, PHOTO_HEIGHT, random);
+                } else {
+                    for (int read; (read = in.read(buffer)) >= 0; ) out.write(buffer, 0, read);
+                }
+                out.closeEntry();
+            }
+        }
+        if (!partial.renameTo(file)) throw new IOException("could not keep " + file);
+        return file;
+    }
+
+    /** An RGB PNG of random pixels, written with stored (uncompressed) zlib blocks. */
+    private static void writeNoisePng(OutputStream target, int width, int height, Random random) throws IOException {
+        DataOutputStream out = new DataOutputStream(target);
+        out.write(new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'});
+        ByteArrayOutputStream header = new ByteArrayOutputStream();
+        DataOutputStream fields = new DataOutputStream(header);
+        fields.writeInt(width);
+        fields.writeInt(height);
+        fields.write(new byte[] {8, 2, 0, 0, 0}); // 8-bit RGB, no interlace.
+        chunk(out, "IHDR", header.toByteArray());
+        ByteArrayOutputStream pixels = new ByteArrayOutputStream(64 * 1024 + 4096);
+        Deflater deflater = new Deflater(Deflater.NO_COMPRESSION);
+        byte[] row = new byte[1 + width * 3];
+        try (DeflaterOutputStream zlib = new DeflaterOutputStream(pixels, deflater, 64 * 1024)) {
+            for (int y = 0; y < height; y++) {
+                random.nextBytes(row);
+                row[0] = 0; // Filter type: none.
+                zlib.write(row);
+                if (pixels.size() >= 64 * 1024) {
+                    chunk(out, "IDAT", pixels.toByteArray());
+                    pixels.reset();
+                }
+            }
+        } finally {
+            deflater.end();
+        }
+        chunk(out, "IDAT", pixels.toByteArray());
+        chunk(out, "IEND", new byte[0]);
+        out.flush();
+    }
+
+    private static void chunk(DataOutputStream out, String type, byte[] data) throws IOException {
+        byte[] name = type.getBytes(StandardCharsets.US_ASCII);
+        CRC32 crc = new CRC32();
+        crc.update(name);
+        crc.update(data);
+        out.writeInt(data.length);
+        out.write(name);
+        out.write(data);
+        out.writeInt((int) crc.getValue());
     }
 
     @Override

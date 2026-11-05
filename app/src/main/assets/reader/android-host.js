@@ -58,6 +58,106 @@
     });
   });
 
+  // How long reader actions take to reach the screen, for scripts/measure.sh.
+  // Each time runs from the key, tap or typed letter to the second animation
+  // frame after it: by then the frame with the action's style and layout work
+  // has been drawn. A resize, such as a rotation, is timed to the frame after
+  // the reader applies the new zoom (it waits for the size to settle), or to
+  // the frame after the resize when the zoom stays the same. View switches
+  // are timed by the reader itself, in its "rendered" message.
+  function afterNextFrame(callback) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(callback);
+    });
+  }
+
+  function timeAction(action, started) {
+    afterNextFrame(function () {
+      send(JSON.stringify({
+        type: "timing",
+        action: action,
+        ms: Math.round(performance.now() - started)
+      }));
+    });
+  }
+
+  function keyAction(event) {
+    if (!event.ctrlKey || event.altKey) {
+      return "";
+    }
+    var key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+    if (!event.shiftKey && (key === "+" || key === "=" || key === "-" || key === "_" || key === "0")) {
+      return "zoom";
+    }
+    return event.shiftKey && key === "t" ? "theme" : "";
+  }
+
+  var CLICK_ACTIONS = { zoomIn: "zoom", zoomOut: "zoom", zoomValue: "zoom", themeButton: "theme" };
+
+  if (window.performance && performance.now && window.requestAnimationFrame) {
+    window.addEventListener("keydown", function (event) {
+      var action = keyAction(event);
+      if (action) {
+        timeAction(action, performance.now());
+      }
+    }, true);
+    window.addEventListener("click", function (event) {
+      var button = event.target && event.target.closest ? event.target.closest("button") : null;
+      var action = button ? CLICK_ACTIONS[button.id] : "";
+      if (action) {
+        timeAction(action, performance.now());
+      }
+    }, true);
+    window.addEventListener("input", function (event) {
+      if (event.target && event.target.id === "findInput") {
+        timeAction("find", performance.now());
+      }
+    }, true);
+
+    var resizeStarted = 0;
+    var resizeDrawn = 0;
+    var resizeTimer = 0;
+    var finishResize = function (ms) {
+      resizeStarted = 0;
+      window.clearTimeout(resizeTimer);
+      send(JSON.stringify({ type: "timing", action: "resize", ms: Math.round(ms) }));
+    };
+    window.addEventListener("resize", function () {
+      if (resizeStarted) {
+        return;
+      }
+      var started = performance.now();
+      resizeStarted = started;
+      resizeDrawn = 0;
+      afterNextFrame(function () {
+        if (resizeStarted === started) {
+          resizeDrawn = performance.now();
+        }
+      });
+      // The reader applies a new zoom 150 ms after the last resize event.
+      // When the zoom stays the same, the time is the first frame's.
+      resizeTimer = window.setTimeout(function () {
+        if (resizeStarted === started) {
+          finishResize((resizeDrawn || performance.now()) - started);
+        }
+      }, 1000);
+    });
+    if (window.MutationObserver) {
+      new MutationObserver(function () {
+        var started = resizeStarted;
+        if (started) {
+          // The zoom's layout may outlast the timer; this frame decides.
+          window.clearTimeout(resizeTimer);
+          afterNextFrame(function () {
+            if (resizeStarted === started) {
+              finishResize(performance.now() - started);
+            }
+          });
+        }
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-zoom"] });
+    }
+  }
+
   // On a phone the desktop toolbar wraps to three rows under the file name.
   // Below 760 px the theme, other-app and Open buttons move up beside the
   // file name, and the find field, the view switch and the zoom share the

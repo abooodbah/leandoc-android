@@ -16,11 +16,15 @@ sealed interface ReaderCommand {
     data class SetTheme(val theme: String) : ReaderCommand
     data class SetView(val view: String) : ReaderCommand
     data class Link(val href: String) : ReaderCommand
-    data class Rendered(val generation: Long, val pages: Long) : ReaderCommand
+    data class Rendered(val generation: Long, val pages: Long, val ms: Long) : ReaderCommand
     data class RenderFailed(val generation: Long, val message: String) : ReaderCommand
+
+    /** How long a reader action took to reach the screen, from android-host.js. */
+    data class Timing(val action: String, val ms: Long) : ReaderCommand
 
     companion object {
         private const val MAX_LINK = 8192
+        private val TIMED_ACTIONS = setOf("find", "zoom", "theme", "resize")
 
         fun parse(text: String): ReaderCommand? {
             val message = try {
@@ -43,9 +47,16 @@ sealed interface ReaderCommand {
                 }
                 "link" -> message.optString("href").takeIf { it.isNotEmpty() && it.length <= MAX_LINK }
                     ?.let { Link(it) }
-                "rendered" -> generationOf(message)?.let { Rendered(it, message.optLong("pages", 0)) }
+                "rendered" -> generationOf(message)?.let {
+                    Rendered(it, message.optLong("pages", 0), message.optLong("ms", -1))
+                }
                 "renderFailed" -> generationOf(message)?.let {
                     RenderFailed(it, message.optString("message").take(500))
+                }
+                "timing" -> {
+                    val action = message.optString("action")
+                    val ms = message.opt("ms")
+                    if (action in TIMED_ACTIONS && ms is Number && ms.toLong() >= 0) Timing(action, ms.toLong()) else null
                 }
                 else -> null
             }
