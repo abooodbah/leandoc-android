@@ -44,11 +44,14 @@ class OutlineSheetTest {
 
     @Test
     fun theCurrentSectionIsHighlightedAndInViewInTheSheet() = openLong { scenario ->
-        // Scrolled with the sheet closed, then opened: the entry is in view.
+        // Scrolled with the sheet closed, and the highlight settled there;
+        // then opened: the entry is in view at once.
         jumpTo(scenario, 0.4)
+        Reader.waitFor(scenario, "($CURRENT_PROBLEMS) === '' && ($CURRENT_TEXT) !== 'Part 1'", timeoutMs = 10_000)
+        android.os.SystemClock.sleep(1_000)
         Reader.js(scenario, "document.getElementById('outlineButton').click()")
         Reader.waitFor(scenario, "$SHOWN('outline')")
-        Reader.waitFor(scenario, "($CURRENT_PROBLEMS) === ''", timeoutMs = 10_000)
+        assertEquals("", Reader.js(scenario, CURRENT_PROBLEMS))
         // Scrolled with the sheet open: the highlight follows and stays in view.
         val before = Reader.js(scenario, CURRENT_TEXT)
         jumpTo(scenario, 0.75)
