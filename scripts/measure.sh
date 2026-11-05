@@ -454,7 +454,7 @@ row() {
     echo
     printf '| Step |'; for label in "${LABELS[@]}"; do printf ' %s |' "$label"; done; printf '\n'
     printf '| --- |'; for _ in "${LABELS[@]}"; do printf ' ---: |'; done; printf '\n'
-    for name in "webview_created" "page_loaded" "reader_ready" "document_sent" "drawn"; do
+    for name in "webview_created" "page_loaded" "reader_ready" "document_sent" "rendered" "drawn"; do
       [ -n "${PHASE_NAMES[$name]:-}" ] || continue
       printf '| %s |' "${name//_/ }"
       for label in "${LABELS[@]}"; do printf ' %s |' "$(median <<<"${PHASES[$label|$name]:-}")"; done

@@ -427,6 +427,7 @@ class MainActivity : Activity() {
             }
             is ReaderCommand.Link -> followLink(command.href)
             is ReaderCommand.Rendered -> {
+                phase("rendered")
                 Log.i(TIMING, "rendered ${command.pages} pages in ${command.ms} ms")
                 if (awaitingFirstRender && command.generation == generation) reportDrawn()
             }
