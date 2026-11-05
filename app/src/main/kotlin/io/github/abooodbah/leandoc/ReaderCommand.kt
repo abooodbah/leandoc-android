@@ -41,7 +41,7 @@ sealed interface ReaderCommand {
                 "reload" -> Reload
                 "openInEditor" -> OpenInEditor
                 "setTheme" -> when (val theme = message.optString("theme")) {
-                    "system", "light", "dark" -> SetTheme(theme)
+                    in Themes.NAMES -> SetTheme(theme)
                     else -> null
                 }
                 "setView" -> when (val view = message.optString("view")) {

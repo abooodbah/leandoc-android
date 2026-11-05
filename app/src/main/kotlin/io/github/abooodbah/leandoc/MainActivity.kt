@@ -108,7 +108,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
-        theme = prefs.getString(KEY_THEME, "system") ?: "system"
+        theme = prefs.getString(KEY_THEME, "system")?.takeIf { it in Themes.NAMES } ?: "system"
         readerView = prefs.getString(KEY_VIEW, "page") ?: "page"
 
         root = FrameLayout(this)
@@ -608,8 +608,9 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     private fun applyBarColors() {
-        val dark = theme == "dark" || (theme == "system" && isNight())
-        val surface = if (dark) SURFACE_DARK else SURFACE_LIGHT
+        val colors = Themes.colors(theme, isNight())
+        val dark = colors.dark
+        val surface = colors.surface
         root.setBackgroundColor(surface)
         window.statusBarColor = surface
         window.navigationBarColor = surface
@@ -647,9 +648,6 @@ class MainActivity : Activity() {
         const val STATE_URI = "document"
         const val REQUEST_OPEN = 1
 
-        // reader.css --surface in its light and dark themes.
-        const val SURFACE_LIGHT = 0xFFFFFFFF.toInt()
-        const val SURFACE_DARK = 0xFF1A1917.toInt()
 
         val PICKER_TYPES = arrayOf(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
