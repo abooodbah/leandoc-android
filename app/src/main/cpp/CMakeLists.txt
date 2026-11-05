@@ -21,5 +21,10 @@ target_compile_options(leandoc PRIVATE
     -O2 -fvisibility=hidden -ffunction-sections -fdata-sections)
 # Unused core functions (file and path helpers for desktop hosts) are dropped
 # by --gc-sections. 16 KB pages are required by Google Play for apps that
-# target Android 15 or later.
-target_link_options(leandoc PRIVATE -Wl,--gc-sections -Wl,-z,max-page-size=16384)
+# target Android 15 or later. Only the JNI entry point is exported
+# (exports.map): the C++ runtime is linked statically, and its symbols were
+# exported too, which kept all of their code in the library.
+target_link_options(leandoc PRIVATE -Wl,--gc-sections -Wl,-z,max-page-size=16384
+    -Wl,--exclude-libs,ALL
+    -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map)
+set_property(TARGET leandoc APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/exports.map)
