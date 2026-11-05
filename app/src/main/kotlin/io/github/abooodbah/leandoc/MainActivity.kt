@@ -95,6 +95,9 @@ class MainActivity : Activity() {
 
     internal val webViewForTest: WebView? get() = webView
 
+    /** Bytes of the sanitized package the app still holds. Read by the instrumented tests. */
+    internal val heldPackageBytesForTest: Int get() = (shown as? Shown.Document)?.packageBytes?.size ?: 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
