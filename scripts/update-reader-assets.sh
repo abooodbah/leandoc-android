@@ -33,6 +33,10 @@ sed 's|^    <link rel="stylesheet" href="/reader.css" />$|&\n    <link rel="styl
   "$desktop/assets/reader.html" > "$assets/reader.html"
 grep -q 'href="/android.css"' "$assets/reader.html"
 grep -q 'src="/android-host.js"' "$assets/reader.html"
+# Android's changes to the desktop reader until the desktop has them:
+# LeanMark's five themes and the theme button's dot. The update stops if
+# the patch does not apply, so it is looked at again.
+patch -p1 --forward --no-backup-if-mismatch -d "$here" < "$here/scripts/android-reader.patch"
 cp "$modules/jszip/dist/jszip.min.js" "$modules/docx-preview/dist/docx-preview.min.js" "$assets/vendor/"
 for font in \
   ibm-plex-sans/files/ibm-plex-sans-latin-400-normal \
