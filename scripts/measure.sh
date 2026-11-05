@@ -291,6 +291,10 @@ wait_renders() {
 declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=() NIGHT_MS=()
 for label in "${LABELS[@]}"; do
   install "$label"
+  # The scrolling above left the emulator in touch mode, where a starting
+  # window gives no view the keyboard focus, and the first build measured
+  # here got no key times in every run. A key press leaves touch mode.
+  adb shell input keyevent KEYCODE_SHIFT_LEFT || true
   adb shell pm clear "$PKG" >/dev/null || log "pm clear failed"
   open_document "$LARGE" "$LARGE_TYPE" >/dev/null
   fully_drawn 90 >/dev/null
