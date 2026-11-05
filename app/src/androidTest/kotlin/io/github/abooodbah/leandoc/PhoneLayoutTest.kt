@@ -136,6 +136,7 @@ class PhoneLayoutTest {
             // The theme button shows its dot only; its name says the theme.
             var theme = document.getElementById('themeButton').getBoundingClientRect();
             if (theme.width > 48) problems.push('the theme button is ' + Math.round(theme.width) + ' px wide');
+            if (document.getElementById('themeLabel').getClientRects().length > 0) problems.push('the theme button shows its label');
             ['viewPage', 'viewReading'].forEach(function (id) {
               if (document.getElementById(id).getClientRects().length > 0) problems.push(id + ' is in the toolbar');
             });
