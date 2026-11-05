@@ -2,20 +2,23 @@
   {
     "name": "Put the lowest fit zoom back to 50%",
     "suite": "device",
+    "tests": "PhoneLayoutTest",
     "file": "app/src/main/assets/reader/reader.js",
     "old": "return Math.max(0.25, Math.min(3, available / pageWidthPixels()));",
     "new": "return Math.max(0.5, Math.min(3, available / pageWidthPixels()));"
   },
   {
-    "name": "Drop the phone style",
+    "name": "Drop Android's stylesheet",
     "suite": "device",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "  document.head.appendChild(phoneStyle);\n",
+    "tests": "PhoneLayoutTest,OutlineSheetTest",
+    "file": "app/src/main/assets/reader/reader.html",
+    "old": "    <link rel=\"stylesheet\" href=\"/android.css\" />\n",
     "new": ""
   },
   {
     "name": "Leave the buttons in the toolbar",
     "suite": "device",
+    "tests": "PhoneLayoutTest",
     "file": "app/src/main/assets/reader/android-host.js",
     "old": "    place();\n    if (phone.addEventListener) {",
     "new": "    if (phone.addEventListener) {"
@@ -23,22 +26,97 @@
   {
     "name": "Keep the wordmark",
     "suite": "device",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "    \" .wordmark { display: none; }\" +\n",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  .wordmark {\n    display: none;\n  }\n",
     "new": ""
   },
   {
     "name": "Keep the find field at its desktop width",
     "suite": "device",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "    \" .search-field { flex: 1 1 0; width: auto; min-width: 88px; }\" +\n",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  .search-field {\n    flex: 1 1 0;\n    width: auto;\n    min-width: 88px;\n  }\n",
     "new": ""
   },
   {
     "name": "Keep the desktop zoom button width",
     "suite": "device",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "    \" .zoom-step { width: 28px; }\" +\n",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  .zoom-step {\n    width: 28px;\n  }\n",
     "new": ""
+  },
+  {
+    "name": "Show the other-app button's label on a phone",
+    "suite": "device",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "    color: transparent;\n    font-size: 0;\n",
+    "new": ""
+  },
+  {
+    "name": "Leave the outline pane hidden on a phone",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "        sheet.element.appendChild(outline);\n",
+    "new": ""
+  },
+  {
+    "name": "Open the sheet without bringing the current entry into view",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "      var link = showCurrentOutlineEntry(list);\n",
+    "new": "      var link = list.querySelector('a[aria-current=\"location\"]');\n"
+  },
+  {
+    "name": "Skip the second look after scrolling stops",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    recheckAfterScrolling();\n",
+    "new": ""
+  },
+  {
+    "name": "Keep the sheet open after a tapped entry",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "      if (sheets.open === sheet && event.target && event.target.closest && event.target.closest(\"a\")) {\n        closeSheet(false);",
+    "new": "      if (sheets.open === sheet && event.target && event.target.closest && event.target.closest(\"a\")) {\n        void 0;"
+  },
+  {
+    "name": "Leave the pane's list where it was after a rotation",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "        afterNextFrame(function () {\n          showCurrentOutlineEntry(list);\n        });\n",
+    "new": ""
+  },
+  {
+    "name": "Keep the outline button for a document without headings",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    new MutationObserver(function () {\n      button.hidden = outline.hidden;",
+    "new": "    new MutationObserver(function () {\n      button.hidden = false;"
+  },
+  {
+    "name": "Let back close the app while a sheet is open",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "            is ReaderCommand.Sheet -> setSheetOpen(command.open)\n",
+    "new": "            is ReaderCommand.Sheet -> Unit\n"
+  },
+  {
+    "name": "Ignore the back gesture's message in the page",
+    "suite": "device",
+    "tests": "OutlineSheetTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    if (event.data === CLOSE_SHEET) {\n      closeSheet(true);\n    } else if",
+    "new": "    if (false) {\n      closeSheet(true);\n    } else if"
   }
 ]

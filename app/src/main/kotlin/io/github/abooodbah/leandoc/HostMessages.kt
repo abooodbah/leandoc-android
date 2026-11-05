@@ -35,6 +35,9 @@ object HostMessages {
             "\"fileName\":${JSONObject.quote(fileName)},\"displayPath\":${JSONObject.quote(fileName)}," +
             "\"report\":$report}"
 
+    /** For android-host.js, which compares the whole text: back closes an open sheet. */
+    fun closeSheet(): String = """{"type":"closeSheet"}"""
+
     fun status(message: String, tone: String = "info"): String =
         JSONObject().put("type", "status").put("message", message).put("tone", tone).toString()
 
