@@ -15,7 +15,9 @@ class ReaderProtocolTest {
         assertEquals(ReaderCommand.Open, ReaderCommand.parse("""{"type":"open"}"""))
         assertEquals(ReaderCommand.Reload, ReaderCommand.parse("""{"type":"reload"}"""))
         assertEquals(ReaderCommand.OpenInEditor, ReaderCommand.parse("""{"type":"openInEditor","tab":1}"""))
-        assertEquals(ReaderCommand.SetTheme("dark"), ReaderCommand.parse("""{"type":"setTheme","theme":"dark"}"""))
+        for (theme in listOf("system", "light", "dark", "dim", "dusk")) {
+            assertEquals(ReaderCommand.SetTheme(theme), ReaderCommand.parse("""{"type":"setTheme","theme":"$theme"}"""))
+        }
         assertEquals(ReaderCommand.SetView("reading"), ReaderCommand.parse("""{"type":"setView","view":"reading"}"""))
         assertEquals(ReaderCommand.Link("https://a.example/"), ReaderCommand.parse("""{"type":"link","href":"https://a.example/"}"""))
         assertEquals(ReaderCommand.Rendered(4, 12, 30), ReaderCommand.parse("""{"type":"rendered","tab":1,"generation":4,"pages":12,"ms":30}"""))
