@@ -288,7 +288,7 @@ wait_renders() {
   done
 }
 
-declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=()
+declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=() NIGHT_MS=()
 for label in "${LABELS[@]}"; do
   install "$label"
   adb shell pm clear "$PKG" >/dev/null || log "pm clear failed"
@@ -341,7 +341,22 @@ for label in "${LABELS[@]}"; do
   adb shell settings put system user_rotation 0
   sleep 6
   RESIZE_MS[$label]=$(timing_lines | action_ms resize | median)
-  log "$label actions: zoom ${ZOOM_MS[$label]:-NA} ms, theme ${THEME_MS[$label]:-NA} ms, find ${FIND_MS[$label]:-NA} ms (max ${FIND_MAX[$label]:-NA}), view ${VIEW_MS[$label]:-NA} ms, rotation ${RESIZE_MS[$label]:-NA} ms"
+  # The system's dark mode switched while reading, as at sunset: Android
+  # creates the activity again, which reads, cleans and draws the file
+  # again. Timed from the new activity's creation to the drawn document, as
+  # the app logs it.
+  adb logcat -c
+  adb shell cmd uimode night yes >/dev/null 2>&1 || log "cmd uimode failed"
+  NIGHT_MS[$label]=NA
+  for _ in $(seq 1 900); do
+    night=$(timing_lines | sed -n 's/^phase drawn \([0-9][0-9]*\) ms$/\1/p' | head -n 1)
+    if [ -n "$night" ]; then NIGHT_MS[$label]=$night; break; fi
+    sleep 0.1
+  done
+  sleep 3
+  adb shell cmd uimode night no >/dev/null 2>&1 || true
+  sleep 5
+  log "$label actions: zoom ${ZOOM_MS[$label]:-NA} ms, theme ${THEME_MS[$label]:-NA} ms, find ${FIND_MS[$label]:-NA} ms (max ${FIND_MAX[$label]:-NA}), view ${VIEW_MS[$label]:-NA} ms, rotation ${RESIZE_MS[$label]:-NA} ms, night mode ${NIGHT_MS[$label]:-NA} ms"
 done
 
 row() {
@@ -394,13 +409,13 @@ row() {
     row "**Total PSS, app and renderer** (KB, median of 3)" "${total[@]}"
   fi
   big_app=(); big_java=(); big_total=(); big_drawn=()
-  zoom=(); theme=(); find=(); find_max=(); view=(); resize=()
+  zoom=(); theme=(); find=(); find_max=(); view=(); resize=(); night=()
   for label in "${LABELS[@]}"; do
     big_app+=("${BIG_APP[$label]:-NA}"); big_java+=("${BIG_JAVA[$label]:-NA}")
     big_total+=("${BIG_TOTAL[$label]:-NA}"); big_drawn+=("${BIG_DRAWN[$label]:-NA}")
     zoom+=("${ZOOM_MS[$label]:-NA}"); theme+=("${THEME_MS[$label]:-NA}")
     find+=("${FIND_MS[$label]:-NA}"); find_max+=("${FIND_MAX[$label]:-NA}")
-    view+=("${VIEW_MS[$label]:-NA}"); resize+=("${RESIZE_MS[$label]:-NA}")
+    view+=("${VIEW_MS[$label]:-NA}"); resize+=("${RESIZE_MS[$label]:-NA}"); night+=("${NIGHT_MS[$label]:-NA}")
   done
   row "$BIG_NAME drawn after a cold start (ms)" "${big_drawn[@]}"
   row "App process PSS after $BIG_NAME (KB)" "${big_app[@]}"
@@ -414,6 +429,7 @@ row() {
   row "Find, slowest letter of the 7 (ms)" "${find_max[@]}"
   row "View switch on $LARGE_NAME (render ms, median of 2)" "${view[@]}"
   row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 2)" "${resize[@]}"
+  row "System dark mode switched on $LARGE_NAME (ms from the new activity to the document drawn again)" "${night[@]}"
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
   row "90th percentile frame time (software GPU, not a budget check)" "${p90[@]}"
