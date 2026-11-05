@@ -149,9 +149,11 @@ Desktop features from 0.1.4 that the app lacks, and why:
   frames at all. Start times on it are also bimodal: the same APK measured
   1,622 and 2,434 ms to the drawn document in one run (PR #14).
 - On WebView before 128 (the API 34 emulator has 113), boxes inside the
-  zoomed page are reported unzoomed. The reader compares them with the
-  document area's edge, so there the highlight can lag the page by a
-  heading or two at a low zoom. WebView 128 and later are not affected.
+  zoomed page are reported unzoomed (the phone layout and outline tests
+  correct for it). The reader's highlight compares those boxes with the
+  document area's edge as they are, so on such a WebView the highlight
+  moves on later than the heading passes; by how much was not measured.
+  Current WebView (128 and later) is not affected.
 
 ## Measured numbers
 
