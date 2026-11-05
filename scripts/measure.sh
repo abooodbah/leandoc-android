@@ -350,10 +350,12 @@ for label in "${LABELS[@]}"; do
   sleep 3
   adb shell settings put system accelerometer_rotation 0
   adb logcat -c
-  adb shell settings put system user_rotation 1
-  sleep 6
-  adb shell settings put system user_rotation 0
-  sleep 6
+  for _ in 1 2 3; do
+    adb shell settings put system user_rotation 1
+    sleep 6
+    adb shell settings put system user_rotation 0
+    sleep 6
+  done
   RESIZE_MS[$label]=$(timing_lines | action_ms resize | median)
   # The system's dark mode switched while reading, as at sunset: Android
   # creates the activity again, which reads, cleans and draws the file
@@ -442,7 +444,7 @@ row() {
   row "Find, one typed letter, $LARGE_NAME (ms to the frame, median of 7)" "${find[@]}"
   row "Find, slowest letter of the 7 (ms)" "${find_max[@]}"
   row "View switch on $LARGE_NAME (render ms, median of 2)" "${view[@]}"
-  row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 2)" "${resize[@]}"
+  row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 6)" "${resize[@]}"
   row "System dark mode switched on $LARGE_NAME (ms from the new activity to the document drawn again)" "${night[@]}"
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
