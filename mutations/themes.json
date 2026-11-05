@@ -1,0 +1,120 @@
+[
+  {
+    "name": "Leave Dim out of the theme button's steps",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "var themeCycle = [\"system\", \"light\", \"dark\", \"dim\", \"dusk\"];",
+    "new": "var themeCycle = [\"system\", \"light\", \"dark\", \"dusk\"];"
+  },
+  {
+    "name": "Name System without the theme it shows",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "      ? \"System (\" + titleCase(shownTheme(theme)) + \")\"",
+    "new": "      ? \"System\""
+  },
+  {
+    "name": "Give Dusk Dark's canvas",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  --canvas: #221e19;",
+    "new": "  --canvas: #0e0d0b;"
+  },
+  {
+    "name": "Keep the desktop's border in Dark",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": ":root[data-theme=\"dark\"] {\n  --border: #2b2924;\n}\n",
+    "new": ""
+  },
+  {
+    "name": "Drop Dim's dot colour",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": ".theme-swatch[data-swatch=\"dim\"] { --swatch: #7f8a99; }\n",
+    "new": ""
+  },
+  {
+    "name": "Mark the current entry in accent blue in every theme",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  box-shadow: inset 2px 0 0 var(--link);\n  color: var(--text-primary);\n  font-weight: 400;",
+    "new": "  box-shadow: inset 2px 0 0 var(--accent-500);\n  color: var(--text-primary);\n  font-weight: 400;"
+  },
+  {
+    "name": "Keep the desktop's bolder current entry",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  color: var(--text-primary);\n  font-weight: 400;\n}",
+    "new": "  color: var(--text-primary);\n}"
+  },
+  {
+    "name": "Forget the theme between runs",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "                prefs.edit().putString(KEY_THEME, theme).apply()\n",
+    "new": ""
+  },
+  {
+    "name": "The sheet's view choice does nothing",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "        (input.value === \"reading\" ? viewReading : viewPage).click();\n",
+    "new": ""
+  },
+  {
+    "name": "The sheet's zoom in does nothing",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    into.addEventListener(\"click\", function () {\n      zoomIn.click();\n    });",
+    "new": "    into.addEventListener(\"click\", function () {\n    });"
+  },
+  {
+    "name": "Disable nothing without a document",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "        input.disabled = !hasDocument;\n",
+    "new": ""
+  },
+  {
+    "name": "Keep the view switch in the phone toolbar",
+    "suite": "device",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  .toolbar > .segmented {\n    display: none;\n  }\n",
+    "new": ""
+  },
+  {
+    "name": "Show the theme's name on the button up to 1080 px",
+    "suite": "device",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  #themeLabel {\n    display: none;\n  }\n",
+    "new": ""
+  },
+  {
+    "name": "Give Dusk Dark's bar colour",
+    "suite": "jvm",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/Themes.kt",
+    "old": "private val dusk = Colors(0xFF29241E.toInt(), dark = true)",
+    "new": "private val dusk = Colors(0xFF1A1917.toInt(), dark = true)"
+  },
+  {
+    "name": "Refuse Dim from the page",
+    "suite": "jvm",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/Themes.kt",
+    "old": "val NAMES = listOf(\"system\", \"light\", \"dark\", \"dim\", \"dusk\")",
+    "new": "val NAMES = listOf(\"system\", \"light\", \"dark\", \"dusk\")"
+  }
+]
