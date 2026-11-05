@@ -96,14 +96,21 @@
 
 /* The current section in the outline, as LeanMark marks it: the muted
    surface, a bar in the link colour and the primary text colour. In every
-   theme these are the theme's own tokens. The second and third selectors
-   are as specific as the desktop's dark rules, which come earlier. */
+   theme these are the theme's own tokens. The entry keeps its weight: a
+   bolder current entry made the browser lay out the page again each time
+   the current section changed (LeanMark measured it). The second and third
+   selectors are as specific as the desktop's dark rules, which come
+   earlier. */
 .outline-list a[aria-current="location"],
 :root[data-theme] .outline-list a[aria-current="location"],
 :root:not([data-theme="light"]) .outline-list a[aria-current="location"] {
   background: var(--surface-muted);
   box-shadow: inset 2px 0 0 var(--link);
   color: var(--text-primary);
+  font-weight: 400;
+}
+
+:root .outline-list a[data-level="1"][aria-current="location"] {
   font-weight: 500;
 }
 

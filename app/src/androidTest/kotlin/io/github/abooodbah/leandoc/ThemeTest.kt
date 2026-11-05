@@ -81,7 +81,7 @@ class ThemeTest {
             assertEquals("$theme background", rgb(expected.getValue("--surface-muted")), look.getString("background"))
             assertEquals("$theme text", rgb(expected.getValue("--text-primary")), look.getString("color"))
             assertTrue("$theme bar: ${look.getString("bar")}", look.getString("bar").startsWith(rgb(expected.getValue("--link")) + " 2px 0px 0px 0px inset"))
-            assertEquals("$theme weight", "500", look.getString("weight"))
+            assertEquals("$theme weight: the current entry keeps its own", look.getString("ownWeight"), look.getString("weight"))
         }
     }
 
@@ -237,7 +237,9 @@ class ThemeTest {
         const val CURRENT_LOOK = """JSON.stringify((function () {
             var link = document.querySelector('#outlineList a[aria-current="location"]');
             var style = getComputedStyle(link);
-            return { background: style.backgroundColor, color: style.color, bar: style.boxShadow, weight: style.fontWeight };
+            var same = document.querySelector('#outlineList a[data-level="' + link.dataset.level + '"]:not([aria-current])');
+            return { background: style.backgroundColor, color: style.color, bar: style.boxShadow,
+              weight: style.fontWeight, ownWeight: getComputedStyle(same).fontWeight };
           })())"""
     }
 }
