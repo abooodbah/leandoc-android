@@ -52,6 +52,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check the native library exports only its JNI entry points
+        run: bash scripts/check-native-exports.sh
+
       - name: Report sizes
         run: |
           {
