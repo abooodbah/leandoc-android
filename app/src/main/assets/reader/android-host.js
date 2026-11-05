@@ -534,11 +534,38 @@
     return button;
   }
 
+  // Escape closes an open sheet, and Tab goes round the sheet's controls
+  // only: the page behind it is dimmed and out of reach, as for a finger.
+  var FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && sheets.open) {
+    var sheet = sheets.open;
+    if (!sheet) {
+      return;
+    }
+    if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       closeSheet(true);
+    } else if (event.key === "Tab" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      var targets = Array.prototype.filter.call(sheet.element.querySelectorAll(FOCUSABLE), function (node) {
+        return node.getClientRects().length > 0;
+      });
+      // A group of radio buttons is one stop; Tab reaches its checked one.
+      targets = targets.filter(function (node) {
+        return node.type !== "radio" || node.checked ||
+          !sheet.element.querySelector('input[type="radio"][name="' + node.name + '"]:checked');
+      });
+      if (!targets.length) {
+        return;
+      }
+      var index = targets.indexOf(document.activeElement);
+      var next = event.shiftKey
+        ? targets[index <= 0 ? targets.length - 1 : index - 1]
+        : targets[index < 0 || index === targets.length - 1 ? 0 : index + 1];
+      event.preventDefault();
+      event.stopPropagation();
+      next.focus();
     }
   }, true);
 
