@@ -38,10 +38,12 @@ def failures(results):
 def main():
     entries = json.loads((ROOT / sys.argv[1]).read_text())
     wanted = sys.argv[2]
+    # Optional: only the mutations with these names, separated by "|".
+    only = set(filter(None, (sys.argv[3] if len(sys.argv) > 3 else "").split("|")))
     print("| Mutation | File | First failing test | Failing tests |")
     print("| --- | --- | --- | ---: |")
     for entry in entries:
-        if entry["suite"] != wanted:
+        if entry["suite"] != wanted or (only and entry["name"] not in only):
             continue
         path = ROOT / entry["file"]
         original = path.read_text()
