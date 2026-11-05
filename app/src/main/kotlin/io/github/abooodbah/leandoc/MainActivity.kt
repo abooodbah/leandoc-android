@@ -1,5 +1,6 @@
 package io.github.abooodbah.leandoc
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -563,6 +564,9 @@ class MainActivity : Activity() {
         send(HostMessages.closeSheet())
     }
 
+    // Android 13 and later call the OnBackInvokedCallback registered in
+    // setSheetOpen, never this; earlier versions call this, never that.
+    @SuppressLint("GestureBackNavigation")
     @Deprecated("Back before Android 13; later versions use the callback in setSheetOpen.")
     override fun onBackPressed() {
         if (sheetOpen) {

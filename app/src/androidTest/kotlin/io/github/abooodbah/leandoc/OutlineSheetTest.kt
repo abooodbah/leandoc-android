@@ -74,13 +74,8 @@ class OutlineSheetTest {
         )
         Reader.waitFor(scenario, "document.getElementById('outlineSheet').hidden")
         assertEquals("Section 150", Reader.js(scenario, CURRENT_TEXT))
-        val top = Reader.js(
-            scenario,
-            "(function () { var link = document.querySelector('#outlineList a[aria-current=\"location\"]');" +
-                " var target = document.querySelector('[data-ld-target=\"' + link.dataset.index + '\"]');" +
-                " return Math.round(target.getBoundingClientRect().top - document.getElementById('docScroller').getBoundingClientRect().top); })()",
-        ) as Number
-        assertTrue("Section 150 is at the top of the document area: $top", top.toInt() in -40..120)
+        val top = Reader.js(scenario, TARGET_TOP) as Number
+        assertTrue("Section 150 is at the top of the document area: $top", top.toInt() in -40..60)
     }
 
     @Test
@@ -135,6 +130,23 @@ class OutlineSheetTest {
         /** True when the element with the id takes space on screen. */
         const val SHOWN = "(function (id) { var e = document.getElementById(id); " +
             "return !!e && e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0; })"
+
+        /**
+         * Where the current entry's heading is on screen, from the top of the
+         * document area. Chromium before 128 reports boxes inside a
+         * CSS-zoomed element in its unzoomed units; times the zoom they are
+         * where the heading is.
+         */
+        const val TARGET_TOP = """(function () {
+            var link = document.querySelector('#outlineList a[aria-current="location"]');
+            if (!link) return null;
+            var target = document.querySelector('[data-ld-target="' + link.dataset.index + '"]');
+            var wrapper = document.querySelector('#docBody .docx-wrapper');
+            var factor = parseFloat(wrapper.style.zoom) || 1;
+            var box = target.getBoundingClientRect();
+            var scale = factor !== 1 && Math.abs(box.width - target.offsetWidth) < 1 ? factor : 1;
+            return Math.round(box.top * scale - document.getElementById('docScroller').getBoundingClientRect().top);
+          })()"""
 
         const val CURRENT_TEXT =
             "(function () { var a = document.querySelector('#outlineList a[aria-current=\"location\"]'); return a ? a.textContent : null; })()"
