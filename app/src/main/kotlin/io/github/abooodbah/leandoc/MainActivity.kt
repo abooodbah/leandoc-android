@@ -60,7 +60,7 @@ class MainActivity : Activity() {
     private sealed interface Shown {
         data object Empty : Shown
 
-        /** [packageBytes] is served once to the page at [ReaderAssets.packageUrl]. */
+        /** [packageBytes] is served once to the page at [ReaderAssets.packageUrl], then dropped. */
         class Document(
             val name: String,
             val generation: Long,
@@ -348,11 +348,17 @@ class MainActivity : Activity() {
         return WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
     }
 
-    /** Runs on a WebView thread. Only the package of the document on screen is served. */
+    /**
+     * Runs on a WebView thread. Only the package of the document on screen is
+     * served, once: the page keeps its own copy, so the app lets go of its
+     * copy here. A page that comes back after a crash finds it gone and the
+     * file is read again (sendCurrentView).
+     */
     private fun servePackage(requested: Long): WebResourceResponse? {
         val current = shown as? Shown.Document ?: return null
         if (current.generation != requested) return null
         val bytes = current.packageBytes ?: return null
+        current.packageBytes = null
         return WebResourceResponse(
             ReaderAssets.PACKAGE_TYPE,
             null,
