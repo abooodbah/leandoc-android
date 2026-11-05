@@ -64,7 +64,7 @@ class ThemeTest {
             val actual = Reader.js(scenario, "JSON.stringify($READ_TOKENS)") as String
             val values = JSONObject(actual)
             for ((token, value) in expected) {
-                assertEquals("$theme $token", value, values.getString(token))
+                assertEquals("$theme $token in $actual", value, values.getString(token))
             }
             assertEquals("$theme dot", DOTS[theme], Reader.js(scenario, DOT_COLOR))
         }
@@ -122,6 +122,13 @@ class ThemeTest {
         Reader.js(scenario, "document.getElementById('settingsButton').click()")
         Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
         Focus.ensure()
+        // The sheet was opened from a script, so the WebView itself does not
+        // have Android's focus yet; the first Tab would only give it that.
+        // Focus it, then put the page's focus back in the sheet, as a tap
+        // on the settings button leaves it.
+        scenario.onActivity { it.webViewForTest!!.requestFocus() }
+        Reader.js(scenario, "document.querySelector('#settingsSheet input[name=\"settings-theme\"]:checked').focus()")
+        Reader.waitFor(scenario, "document.activeElement && document.activeElement.name === 'settings-theme'")
         val outside = mutableListOf<String>()
         repeat(12) { step ->
             Reader.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
@@ -235,17 +242,13 @@ class ThemeTest {
         const val READ_TOKENS = """(function () {
             var names = ['--canvas', '--surface', '--surface-muted', '--border', '--text-primary',
               '--text-secondary', '--text-disabled', '--ring', '--link', '--link-hover', '--selection'];
-            var probe = document.createElement('span');
-            document.body.appendChild(probe);
-            var out = {};
+            // A custom property's computed value has its var() references
+            // already replaced, so each is the theme's own colour.
+            var style = getComputedStyle(document.documentElement);
+            var out = { theme: document.documentElement.getAttribute('data-theme') };
             names.forEach(function (name) {
-              probe.style.color = 'var(' + name + ')';
-              var parts = getComputedStyle(probe).color.match(/\d+/g).slice(0, 3);
-              out[name] = '#' + parts.map(function (part) {
-                return ('0' + Number(part).toString(16)).slice(-2);
-              }).join('');
+              out[name] = style.getPropertyValue(name).trim().toLowerCase();
             });
-            probe.remove();
             return out;
           })()"""
 
