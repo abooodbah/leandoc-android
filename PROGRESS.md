@@ -33,7 +33,7 @@ Pull requests, in order:
 | 1 | #16 Export only the JNI entry point from the native library | merged |
 | 1 | #17 Leave the Kotlin metadata files out of the APK | merged |
 | 1 | Let go of the package once the page has it | next |
-| 2 | The outline as a sheet on phones; the highlight after a long jump | next |
+| 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
 | 3 | Five themes and the theme dot; settings button and sheet | planned |
 | 4 | Port LeanDoc desktop 0.2.0's reader | waits for the desktop merge |
 | 5 | Release 0.2.0 | last |
@@ -98,6 +98,13 @@ Desktop features from 0.1.4 that the app lacks, and why:
   CI checks the exports (`scripts/check-native-exports.sh`).
 - #17: the Kotlin compiler's metadata files are left out of the APK
   (13,728 bytes); CI checks it (`scripts/check-apk-extras.sh`).
+- #19: on a phone the outline opens as a sheet from the bottom edge (the
+  desktop page hides it below 760 px), with the current section highlighted
+  and kept in view; a tapped entry jumps and closes it; back, the scrim,
+  Escape and the close button close it; in landscape the pane returns with
+  the current entry in view. After a long jump the highlight is checked
+  again once scrolling stops (it stayed several sections off). On a phone
+  "Open in another app" is an icon. The phone layout moved to `android.css`.
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.
@@ -141,8 +148,10 @@ Desktop features from 0.1.4 that the app lacks, and why:
   budget check, and in some runs the scrolling measure did not register
   frames at all. Start times on it are also bimodal: the same APK measured
   1,622 and 2,434 ms to the drawn document in one run (PR #14).
-- On a phone in portrait the desktop page hides the outline, so there is no
-  outline and no section highlight there (step 2 of this round).
+- On WebView before 128 (the API 34 emulator has 113), boxes inside the
+  zoomed page are reported unzoomed. The reader compares them with the
+  document area's edge, so there the highlight can lag the page by a
+  heading or two at a low zoom. WebView 128 and later are not affected.
 
 ## Measured numbers
 
