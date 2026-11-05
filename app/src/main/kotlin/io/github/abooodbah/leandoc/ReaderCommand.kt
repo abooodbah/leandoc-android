@@ -22,6 +22,9 @@ sealed interface ReaderCommand {
     /** How long a reader action took to reach the screen, from android-host.js. */
     data class Timing(val action: String, val ms: Long) : ReaderCommand
 
+    /** A sheet (android-host.js) opened or closed; back closes an open one. */
+    data class Sheet(val open: Boolean) : ReaderCommand
+
     companion object {
         private const val MAX_LINK = 8192
         private val TIMED_ACTIONS = setOf("find", "zoom", "theme", "resize")
@@ -53,6 +56,7 @@ sealed interface ReaderCommand {
                 "renderFailed" -> generationOf(message)?.let {
                     RenderFailed(it, message.optString("message").take(500))
                 }
+                "sheet" -> (message.opt("open") as? Boolean)?.let { Sheet(it) }
                 "timing" -> {
                     val action = message.optString("action")
                     val ms = message.opt("ms")

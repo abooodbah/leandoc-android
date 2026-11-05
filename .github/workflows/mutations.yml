@@ -15,6 +15,10 @@ on:
         description: Which suites to run (jvm, device or both)
         required: false
         default: both
+      only:
+        description: Only the mutations with these names, separated by |
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -35,7 +39,9 @@ jobs:
       - name: Build once
         run: ./gradlew --no-daemon testDebugUnitTest
       - name: Mutations
-        run: python3 scripts/mutations.py "${{ inputs.list }}" jvm | tee mutations.md
+        env:
+          ONLY: ${{ inputs.only }}
+        run: python3 scripts/mutations.py "${{ inputs.list }}" jvm "$ONLY" | tee mutations.md
       - name: Summary
         if: always()
         run: cat mutations.md | tee -a "$GITHUB_STEP_SUMMARY"
@@ -75,6 +81,8 @@ jobs:
         run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Mutations
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ONLY: ${{ inputs.only }}
         with:
           api-level: 34
           target: default
@@ -83,7 +91,7 @@ jobs:
           cores: 4
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: python3 scripts/mutations.py "${{ inputs.list }}" device | tee mutations.md
+          script: python3 scripts/mutations.py "${{ inputs.list }}" device "$ONLY" | tee mutations.md
       - name: Summary
         if: always()
         run: cat mutations.md | tee -a "$GITHUB_STEP_SUMMARY"

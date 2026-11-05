@@ -1,0 +1,245 @@
+/* Android's own additions to the desktop reader page (reader.css). Loaded
+   after it, so equal selectors here win. Phones are pages up to 760 px
+   wide, where the desktop page hides the outline pane. */
+
+/* The phone toolbar: two rows. The theme, other-app and Open buttons move up
+   beside the file name (android-host.js); the find field, the view switch
+   and the zoom share the second row. */
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px;
+  }
+
+  .wordmark {
+    display: none;
+  }
+
+  .identity {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .file-copy,
+  .file-copy strong {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .phone-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .phone-actions .button {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .search-field {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 88px;
+  }
+
+  #findCount:empty {
+    min-width: 0;
+    padding-right: 0;
+  }
+
+  .segmented .segment {
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .zoom-step {
+    width: 28px;
+  }
+
+  .zoom-value {
+    min-width: 44px;
+  }
+
+  /* "Open in another app" as an icon. The label stays the button's text, so
+     it is still the name TalkBack reads. */
+  .phone-actions #editorButton {
+    position: relative;
+    width: 40px;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+  }
+
+  .phone-actions #editorButton::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    background: var(--text-primary);
+    content: "";
+    -webkit-mask: var(--icon-open-elsewhere) center / 16px 16px no-repeat;
+    mask: var(--icon-open-elsewhere) center / 16px 16px no-repeat;
+  }
+}
+
+:root {
+  /* A page with an arrow out of it, drawn like the reader's other icons. */
+  --icon-open-elsewhere: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3'/%3E%3C/svg%3E");
+}
+
+/* The outline button opens the outline as a sheet. It shows only on phones,
+   and only when the document has headings. */
+.android-icon-button {
+  display: none;
+  width: 40px;
+  padding: 0;
+}
+
+.android-icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+@media (max-width: 760px) {
+  :root[data-has-document] .android-icon-button:not([hidden]) {
+    display: inline-flex;
+  }
+}
+
+/* Sheets rise from the bottom edge over a dimmed page. */
+.android-scrim {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  background: rgb(0 0 0 / 32%);
+}
+
+.android-sheet {
+  position: fixed;
+  z-index: 41;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  max-height: min(72vh, 640px);
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 18%);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.android-sheet,
+.android-sheet * {
+  box-sizing: border-box;
+}
+
+.android-sheet-head {
+  display: flex;
+  min-height: 52px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 0 16px;
+}
+
+.android-sheet-head h2 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.android-sheet-close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.android-sheet-close:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.android-sheet-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+}
+
+/* The desktop outline pane, inside the sheet. Its own heading and collapse
+   button give way to the sheet's. */
+.android-sheet .outline {
+  display: flex;
+  width: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+}
+
+.android-sheet .outline-head {
+  display: none;
+}
+
+.android-sheet .outline-list {
+  padding: 0 8px 16px;
+  overscroll-behavior: contain;
+}
+
+.android-sheet .outline-list a {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-size: 15px;
+}
+
+@media (forced-colors: active) {
+  .android-sheet {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .phone-actions #editorButton::before {
+    background: ButtonText;
+  }
+}
+
+@media print {
+  .android-sheet,
+  .android-scrim {
+    display: none !important;
+  }
+}

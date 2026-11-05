@@ -1,5 +1,6 @@
 package io.github.abooodbah.leandoc
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -33,6 +34,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
@@ -89,6 +92,10 @@ class MainActivity : Activity() {
     private var awaitingFirstRender = true
     private var theme = "system"
     private var readerView = "page"
+
+    // While the page shows a sheet, back closes it instead of the app.
+    private var sheetOpen = false
+    private var sheetBack: Any? = null
 
     /** Every request the WebView made that was refused. Read by the instrumented tests. */
     internal val blockedRequests = CopyOnWriteArrayList<String>()
@@ -397,6 +404,8 @@ class MainActivity : Activity() {
     private fun handleReaderMessage(message: String) {
         when (val command = ReaderCommand.parse(message) ?: return) {
             ReaderCommand.Ready -> {
+                // A new page has no sheet open.
+                setSheetOpen(false)
                 readerReady = true
                 phase("reader ready")
                 send(HostMessages.host(versionName()))
@@ -423,6 +432,7 @@ class MainActivity : Activity() {
             }
             is ReaderCommand.RenderFailed -> if (awaitingFirstRender) reportDrawn()
             is ReaderCommand.Timing -> Log.i(TIMING, "action ${command.action} ${command.ms} ms")
+            is ReaderCommand.Sheet -> setSheetOpen(command.open)
         }
     }
 
@@ -536,6 +546,43 @@ class MainActivity : Activity() {
             }
             is LinkAction.Refuse -> send(HostMessages.status(action.message, "warning"))
             LinkAction.Ignore -> Unit
+        }
+    }
+
+    // Sheets
+
+    private fun setSheetOpen(open: Boolean) {
+        sheetOpen = open
+        if (Build.VERSION.SDK_INT >= 33) {
+            val dispatcher = onBackInvokedDispatcher
+            val registered = sheetBack as OnBackInvokedCallback?
+            if (open && registered == null) {
+                val callback = OnBackInvokedCallback { closeSheet() }
+                dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback)
+                sheetBack = callback
+            } else if (!open && registered != null) {
+                dispatcher.unregisterOnBackInvokedCallback(registered)
+                sheetBack = null
+            }
+        }
+    }
+
+    private fun closeSheet() {
+        // Closed here at once, so back never waits on a page that went away.
+        setSheetOpen(false)
+        send(HostMessages.closeSheet())
+    }
+
+    // Android 13 and later call the OnBackInvokedCallback registered in
+    // setSheetOpen, never this; earlier versions call this, never that.
+    @SuppressLint("GestureBackNavigation")
+    @Deprecated("Back before Android 13; later versions use the callback in setSheetOpen.")
+    override fun onBackPressed() {
+        if (sheetOpen) {
+            closeSheet()
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
         }
     }
 

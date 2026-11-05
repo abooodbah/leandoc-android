@@ -18,6 +18,7 @@ object ReaderAssets {
     private val files = mapOf(
         "/reader.html" to "text/html",
         "/reader.css" to "text/css",
+        "/android.css" to "text/css",
         "/reader.js" to "text/javascript",
         "/fixups.js" to "text/javascript",
         "/fidelity.js" to "text/javascript",

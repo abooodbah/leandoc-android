@@ -110,12 +110,16 @@ class PhoneLayoutTest {
         /** An empty string when every control is on screen and they take at most [maxRows] rows. */
         fun controlProblems(maxRows: Int) = """(function () {
             var width = document.documentElement.clientWidth;
-            var ids = ['fileName', 'findInput', 'viewPage', 'viewReading', 'zoomOut', 'zoomValue',
-              'zoomIn', 'themeButton', 'editorButton', 'openButton'];
+            var ids = ['fileName', 'outlineButton', 'findInput', 'viewPage', 'viewReading', 'zoomOut',
+              'zoomValue', 'zoomIn', 'themeButton', 'editorButton', 'openButton'];
             var problems = [];
             var rows = [];
             ids.forEach(function (id) {
               var element = document.getElementById(id);
+              if (!element) {
+                problems.push(id + ' is missing');
+                return;
+              }
               var box = element.getBoundingClientRect();
               if (element.hidden || getComputedStyle(element).display === 'none' || box.width < 1) {
                 if (id !== 'editorButton') problems.push(id + ' is hidden');

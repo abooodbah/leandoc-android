@@ -38,8 +38,14 @@
     })
   });
 
+  // Messages for this file rather than the reader. The app sends this one
+  // when the back gesture should close an open sheet.
+  var CLOSE_SHEET = '{"type":"closeSheet"}';
+
   function receive(event) {
-    if (window.LeanDocHost && typeof event.data === "string") {
+    if (event.data === CLOSE_SHEET) {
+      closeSheet(true);
+    } else if (window.LeanDocHost && typeof event.data === "string") {
       window.LeanDocHost.receive(event.data);
     }
   }
@@ -160,28 +166,230 @@
 
   // On a phone the desktop toolbar wraps to three rows under the file name.
   // Below 760 px the theme, other-app and Open buttons move up beside the
-  // file name, and the find field, the view switch and the zoom share the
-  // second row. The buttons keep their ids and handlers; they move back into
-  // the toolbar when the page is wider again, as in landscape on a tablet.
-  var phoneStyle = document.createElement("style");
-  phoneStyle.textContent =
-    "@media (max-width: 760px) {" +
-    " .topbar { flex-wrap: wrap; gap: 6px; padding: 6px 12px; }" +
-    " .wordmark { display: none; }" +
-    " .identity { flex: 1 1 0; min-width: 0; }" +
-    " .file-copy, .file-copy strong { min-width: 0; max-width: 100%; }" +
-    " .phone-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }" +
-    " .phone-actions .button { padding-right: 10px; padding-left: 10px; }" +
-    " .toolbar { width: 100%; flex-wrap: wrap; gap: 4px; }" +
-    " .search-field { flex: 1 1 0; width: auto; min-width: 88px; }" +
-    " #findCount:empty { min-width: 0; padding-right: 0; }" +
-    " .segmented .segment { min-width: 0; padding-right: 8px; padding-left: 8px; }" +
-    " .zoom-step { width: 28px; }" +
-    " .zoom-value { min-width: 44px; }" +
-    "}";
-  document.head.appendChild(phoneStyle);
+  // file name (android.css lays out the two rows). The buttons keep their ids
+  // and handlers; they move back into the toolbar when the page is wider
+  // again, as in landscape on a tablet.
+  //
+  // The desktop page hides its outline below 760 px. On a phone the outline
+  // button opens the same outline pane in a sheet from the bottom edge, so
+  // the reader's highlight of the current section, and its scrolling of the
+  // list to keep that entry in view, work there as in the pane. Android's
+  // back gesture closes an open sheet first.
+  var SVG = "http://www.w3.org/2000/svg";
+
+  function icon(paths) {
+    var svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    paths.forEach(function (d) {
+      var path = document.createElementNS(SVG, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  var sheets = {
+    open: null,
+    returnFocus: null
+  };
+
+  function tellApp(open) {
+    send(JSON.stringify({ type: "sheet", open: open }));
+  }
+
+  function closeSheet(restoreFocus) {
+    var sheet = sheets.open;
+    if (!sheet) {
+      return;
+    }
+    sheets.open = null;
+    sheet.element.hidden = true;
+    sheet.scrim.hidden = true;
+    sheet.button.setAttribute("aria-expanded", "false");
+    delete document.documentElement.dataset.sheet;
+    tellApp(false);
+    var target = sheets.returnFocus;
+    sheets.returnFocus = null;
+    if (restoreFocus && target && target.isConnected) {
+      target.focus({ preventScroll: true });
+    }
+  }
+
+  function openSheet(sheet) {
+    if (sheets.open === sheet) {
+      return;
+    }
+    closeSheet(false);
+    sheets.open = sheet;
+    sheets.returnFocus = sheet.button;
+    sheet.element.hidden = false;
+    sheet.scrim.hidden = false;
+    sheet.button.setAttribute("aria-expanded", "true");
+    document.documentElement.dataset.sheet = sheet.name;
+    tellApp(true);
+    sheet.opened();
+  }
+
+  function makeSheet(name, title, button, opened) {
+    var scrim = document.createElement("div");
+    scrim.className = "android-scrim";
+    scrim.hidden = true;
+    var element = document.createElement("section");
+    element.className = "android-sheet";
+    element.id = name + "Sheet";
+    element.hidden = true;
+    element.setAttribute("role", "dialog");
+    element.setAttribute("aria-modal", "true");
+    var head = document.createElement("div");
+    head.className = "android-sheet-head";
+    var heading = document.createElement("h2");
+    heading.id = name + "SheetTitle";
+    heading.textContent = title;
+    element.setAttribute("aria-labelledby", heading.id);
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "android-sheet-close";
+    close.setAttribute("aria-label", "Close");
+    close.appendChild(icon(["M4 4l8 8M12 4l-8 8"]));
+    head.appendChild(heading);
+    head.appendChild(close);
+    element.appendChild(head);
+    document.body.appendChild(scrim);
+    document.body.appendChild(element);
+    var sheet = {
+      name: name,
+      element: element,
+      scrim: scrim,
+      heading: heading,
+      button: button,
+      opened: opened
+    };
+    scrim.addEventListener("click", function () {
+      closeSheet(true);
+    });
+    close.addEventListener("click", function () {
+      closeSheet(true);
+    });
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", element.id);
+    button.addEventListener("click", function () {
+      if (sheets.open === sheet) {
+        closeSheet(true);
+      } else {
+        openSheet(sheet);
+      }
+    });
+    return sheet;
+  }
+
+  // Scrolls the outline list so the current entry sits a third of the way
+  // down, as the reader does when the entry leaves the list's view.
+  function showCurrentOutlineEntry(list) {
+    var link = list.querySelector('a[aria-current="location"]');
+    if (!link) {
+      return null;
+    }
+    var top = link.offsetTop - list.offsetTop;
+    if (top < list.scrollTop || top + link.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+    }
+    return link;
+  }
+
+  function setUpOutlineSheet(toolbarSlot, phone) {
+    var outline = document.getElementById("outline");
+    var list = document.getElementById("outlineList");
+    var label = document.getElementById("outlineLabel");
+    if (!outline || !list) {
+      return;
+    }
+    var home = outline.parentNode;
+    var next = outline.nextSibling;
+    var title = label ? label.textContent.trim() : "Outline";
+    var button = document.createElement("button");
+    button.id = "outlineButton";
+    button.type = "button";
+    button.className = "button button-ghost android-icon-button doc-control";
+    button.setAttribute("aria-label", title);
+    button.title = title;
+    button.hidden = outline.hidden;
+    button.appendChild(icon(["M2.5 4h1M6 4h7.5M2.5 8h1M6 8h7.5M2.5 12h1M6 12h7.5"]));
+    toolbarSlot(button);
+    var sheet = makeSheet("outline", title, button, function () {
+      var link = showCurrentOutlineEntry(list);
+      var first = link || list.querySelector("a");
+      (first || sheet.element.querySelector(".android-sheet-close")).focus({ preventScroll: true });
+    });
+    // The reader hides the outline when the document has no headings.
+    new MutationObserver(function () {
+      button.hidden = outline.hidden;
+      if (outline.hidden && sheets.open === sheet) {
+        closeSheet(false);
+      }
+    }).observe(outline, { attributes: true, attributeFilter: ["hidden"] });
+    // A tapped entry: the reader has scrolled to it (its handler runs first,
+    // as reader.js registered it first); the sheet gives way to the page.
+    list.addEventListener("click", function (event) {
+      if (sheets.open === sheet && event.target && event.target.closest && event.target.closest("a")) {
+        closeSheet(false);
+      }
+    });
+    function place() {
+      if (phone.matches) {
+        sheet.element.appendChild(outline);
+      } else {
+        if (sheets.open === sheet) {
+          closeSheet(false);
+        }
+        home.insertBefore(outline, next && next.parentNode === home ? next : null);
+        // Back in the pane, as after turning a phone to landscape: the list
+        // starts at the top, so the current entry is brought into view.
+        afterNextFrame(function () {
+          showCurrentOutlineEntry(list);
+        });
+      }
+    }
+    place();
+    return place;
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && sheets.open) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSheet(true);
+    }
+  }, true);
+
+  // The reader picks the current section in the first frame after each
+  // scroll event. After a long jump, the pages that come into view are still
+  // waiting to be laid out in that frame (they use content-visibility), so
+  // their headings are not where they will be, and the highlight stayed on a
+  // section several pages away until the next scroll. Once scrolling stops,
+  // the reader's scroll handlers run once more, on the laid-out pages.
+  function recheckAfterScrolling() {
+    var scroller = document.getElementById("docScroller");
+    if (!scroller) {
+      return;
+    }
+    var timer = 0;
+    scroller.addEventListener("scroll", function (event) {
+      if (!event.isTrusted) {
+        return;
+      }
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () {
+        afterNextFrame(function () {
+          scroller.dispatchEvent(new Event("scroll"));
+        });
+      }, 120);
+    }, { passive: true });
+  }
 
   document.addEventListener("DOMContentLoaded", function () {
+    recheckAfterScrolling();
     var toolbar = document.querySelector(".toolbar");
     var identity = document.querySelector(".identity");
     var moved = ["themeButton", "editorButton", "openButton"].map(function (id) {
@@ -195,6 +403,9 @@
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-label", "Document actions");
     var phone = window.matchMedia("(max-width: 760px)");
+    var placeOutline = setUpOutlineSheet(function (button) {
+      actions.appendChild(button);
+    }, phone);
     function place() {
       if (phone.matches) {
         moved.forEach(function (button) { actions.appendChild(button); });
@@ -204,6 +415,9 @@
       } else if (actions.parentNode) {
         moved.forEach(function (button) { toolbar.appendChild(button); });
         actions.parentNode.removeChild(actions);
+      }
+      if (placeOutline) {
+        placeOutline();
       }
     }
     place();

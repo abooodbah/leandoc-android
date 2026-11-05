@@ -1,5 +1,6 @@
 package io.github.abooodbah.leandoc
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,6 +41,18 @@ class ReaderProtocolTest {
         )) {
             assertNull(text, ReaderCommand.parse(text))
         }
+    }
+
+    @Test
+    fun sheetsAndTheBackGesture() {
+        assertEquals(ReaderCommand.Sheet(true), ReaderCommand.parse("""{"type":"sheet","open":true}"""))
+        assertEquals(ReaderCommand.Sheet(false), ReaderCommand.parse("""{"type":"sheet","open":false}"""))
+        assertNull(ReaderCommand.parse("""{"type":"sheet"}"""))
+        assertNull(ReaderCommand.parse("""{"type":"sheet","open":"yes"}"""))
+        // android-host.js matches the whole text of this message.
+        assertEquals("""{"type":"closeSheet"}""", HostMessages.closeSheet())
+        val bridge = File("src/main/assets/reader/android-host.js").readText()
+        assertTrue(bridge.contains("var CLOSE_SHEET = '" + HostMessages.closeSheet() + "';"))
     }
 
     @Test

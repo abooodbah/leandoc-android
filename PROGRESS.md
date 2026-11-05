@@ -33,7 +33,7 @@ Pull requests, in order:
 | 1 | #16 Export only the JNI entry point from the native library | merged |
 | 1 | #17 Leave the Kotlin metadata files out of the APK | merged |
 | 1 | #18 Let go of the package once the page has it | merged |
-| 2 | The outline as a sheet on phones; the highlight after a long jump | next |
+| 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
 | 3 | Five themes and the theme dot; settings button and sheet | planned |
 | 4 | Port LeanDoc desktop 0.2.0's reader | waits for the desktop merge |
 | 5 | Release 0.2.0 | last |
@@ -98,10 +98,21 @@ Desktop features from 0.1.4 that the app lacks, and why:
   CI checks the exports (`scripts/check-native-exports.sh`).
 - #17: the Kotlin compiler's metadata files are left out of the APK
   (13,728 bytes); CI checks it (`scripts/check-apk-extras.sh`).
-- #18: the app lets go of the sanitized package once the page has it. The
-  app's Java heap after the 22.5 MB `large-photos.docx` went from 25,132 to
-  1,352 KB. The app's total PSS after that document varies by tens of MB
-  between runs of the same build, so the Java heap is the number to compare.
+- #18: the app lets go of the sanitized package once the page has it.
+  After the 22.5 MB `large-photos.docx` the app's Java heap went from
+  25,080 to 1,300 KB and the total PSS with the renderer from 221,846 to
+  197,739 KB (run 41987890797). The app's PSS after that document varies by
+  tens of MB between runs of the same build, so the Java heap is the steadier
+  number. The time to draw that document is one sample per build and varied
+  (2,112 and 3,143 ms in that run, 1,744 and 1,909 in an earlier one); not
+  measured further.
+- #19: on a phone the outline opens as a sheet from the bottom edge (the
+  desktop page hides it below 760 px), with the current section highlighted
+  and kept in view; a tapped entry jumps and closes it; back, the scrim,
+  Escape and the close button close it; in landscape the pane returns with
+  the current entry in view. After a long jump the highlight is checked
+  again once scrolling stops (it stayed several sections off). On a phone
+  "Open in another app" is an icon. The phone layout moved to `android.css`.
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.
@@ -145,8 +156,12 @@ Desktop features from 0.1.4 that the app lacks, and why:
   budget check, and in some runs the scrolling measure did not register
   frames at all. Start times on it are also bimodal: the same APK measured
   1,622 and 2,434 ms to the drawn document in one run (PR #14).
-- On a phone in portrait the desktop page hides the outline, so there is no
-  outline and no section highlight there (step 2 of this round).
+- On WebView before 128 (the API 34 emulator has 113), boxes inside the
+  zoomed page are reported unzoomed (the phone layout and outline tests
+  correct for it). The reader's highlight compares those boxes with the
+  document area's edge as they are, so on such a WebView the highlight
+  moves on later than the heading passes; by how much was not measured.
+  Current WebView (128 and later) is not affected.
 
 ## Measured numbers
 

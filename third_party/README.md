@@ -9,7 +9,7 @@ the sums file changing with it.
 | --- | --- | --- |
 | `app/src/main/assets/reader/reader.css`, `fixups.js`, `fidelity.js` | desktop LeanDoc `assets/` | commit in `reader-assets.sha256` |
 | `app/src/main/assets/reader/reader.js` | desktop LeanDoc `assets/reader.js`, with the lowest fit zoom changed from 50% to 25% so a page fits a phone | same |
-| `app/src/main/assets/reader/reader.html` | desktop LeanDoc `assets/reader.html`, plus one `<script>` line for `android-host.js` | same |
+| `app/src/main/assets/reader/reader.html` | desktop LeanDoc `assets/reader.html`, plus a `<link>` line for `android.css` and a `<script>` line for `android-host.js` | same |
 | `app/src/main/cpp/core/` | desktop LeanDoc `src/core/` | same |
 | `native-tests/CoreTests.cpp`, `TestZip.*` | desktop LeanDoc `tests/core/` | same |
 | `app/src/androidTest/assets/fixtures/` | desktop LeanDoc `tests/fixtures/` | same |
@@ -19,6 +19,6 @@ the sums file changing with it.
 | `app/src/main/assets/reader/vendor/jszip.min.js` | npm `jszip` | 3.10.2 |
 | `app/src/main/assets/reader/fonts/` | npm `@fontsource/ibm-plex-*` | 5.3.0 |
 
-`app/src/main/assets/reader/android-host.js` is the only reader file written
-for Android. Licenses are in `app/src/main/assets/THIRD_PARTY_NOTICES.md`,
+`app/src/main/assets/reader/android-host.js` and `android.css` are the only
+reader files written for Android. Licenses are in `app/src/main/assets/THIRD_PARTY_NOTICES.md`,
 which ships inside the app.
