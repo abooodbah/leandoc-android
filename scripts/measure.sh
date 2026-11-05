@@ -147,6 +147,18 @@ java_heap_of() {
   adb shell dumpsys meminfo "$1" | tr -d '\r' | awk '/^ *Java Heap:/ { print $3; exit }'
 }
 
+# The App Summary rows, "Java Heap: 123 Native Heap: 456 ...", in KB.
+app_summary_of() {
+  adb shell dumpsys meminfo "$1" | tr -d '\r' | awk '
+    /App Summary/ { inside = 1; next }
+    inside && /^ *(Java Heap|Native Heap|Code|Stack|Graphics|Private Other|System):/ {
+      name = $0; sub(/:.*/, "", name); gsub(/^ +/, "", name)
+      value = $0; sub(/^[^:]*: */, "", value); split(value, parts, " ")
+      printf "%s %s, ", name, parts[1]
+    }
+    inside && /TOTAL PSS/ { exit }'
+}
+
 renderer_pss() {
   # WebView renderers are isolated processes; their PSS is read from the
   # system-wide "Total PSS by process" list rather than by pid.
@@ -204,6 +216,7 @@ for label in "${LABELS[@]}"; do
   if [ "$WEBVIEW" = yes ]; then renderer=$(renderer_pss); fi
   BIG_TOTAL[$label]=$(plus "${BIG_APP[$label]:-NA}" "$renderer")
   log "$label big file: drawn ${BIG_DRAWN[$label]} ms, app ${BIG_APP[$label]:-NA} KB, Java heap ${BIG_JAVA[$label]:-NA} KB, renderer $renderer KB"
+  log "$label big file, app summary in KB: $(app_summary_of "$PKG")"
 done
 
 declare -A APP_PSS=() RENDERER_PSS=() TOTAL_PSS=() LARGE_DRAWN=() INDEXED=() JANK=() FRAMES=() P90=()
