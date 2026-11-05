@@ -1,0 +1,9 @@
+/* The only symbol the app needs from the library: the JNI entry point
+   that DocCore.open binds to. Everything else stays local, so the linker
+   can drop what nothing calls. */
+{
+  global:
+    Java_io_github_abooodbah_leandoc_DocCore_open;
+  local:
+    *;
+};

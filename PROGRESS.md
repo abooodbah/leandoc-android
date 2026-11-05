@@ -29,8 +29,8 @@ Pull requests, in order:
 
 | Step | Pull request | State |
 | --- | --- | --- |
-| 1 | #15 Measure reader actions and a large document on the emulator | this one |
-| 1 | #16 Export only the JNI entry point from the native library | open, CI green |
+| 1 | #15 Measure reader actions and a large document on the emulator | merged |
+| 1 | #16 Export only the JNI entry point from the native library | merged |
 | 1 | #17 Leave the Kotlin metadata files out of the APK | open, CI green |
 | 1 | Let go of the package once the page has it | next |
 | 2 | The outline as a sheet on phones; the highlight after a long jump | next |
@@ -48,7 +48,7 @@ typed letter to the second animation frame after it. Run 41981911611 for
 
 | Place | What it costs | Measured (main) | Proposed fix | State |
 | --- | --- | --- | --- | --- |
-| Native library: the C++ runtime is linked statically and all its symbols were exported | Exported code cannot be dropped by `--gc-sections` | 1,977 exported symbols; arm64 `libleandoc.so` 1,122,384 bytes; APK 3,352,010 bytes; arm64 download 735,329 bytes | Export only the JNI entry point (version script) | #16: 1 symbol; 426,032; 1,540,690; 535,974 |
+| Native library: the C++ runtime is linked statically and all its symbols were exported | Exported code cannot be dropped by `--gc-sections` | 1,977 exported symbols; arm64 `libleandoc.so` 1,122,384 bytes; APK 3,352,010 bytes; arm64 download 735,329 bytes | Export only the JNI entry point (version script) | fixed in #16: 1 symbol; 426,032; 1,540,690; 535,974 |
 | Kotlin compiler metadata in the APK | Files only kotlin-reflect reads | 13,728 bytes of the APK, 13,345 of the arm64 download | Leave them out | #17: APK 3,338,282 |
 | The app keeps the sanitized package after the page fetched it | The document's size in the Java heap for as long as it is open; the page keeps its own copy | Java heap 25,120 KB, app PSS 151,833 KB after the 22.5 MB `large-photos.docx` | Drop it once served; a new page reads the file again | next pull request |
 | Open: WebView, page and document | Cold start to the first page | First frame 145 ms over the empty app; drawn 1,282 ms over its first frame (`styles.docx`); 300 pages drawn in 3,634 ms. WebView created at 211 ms, page loaded at 677, drawn at 1,597 | No clear win: the page's scripts load in about 470 ms and docx-preview renders in about 900. Budget is for a phone (under 1 s); see the phone test | for you to decide |
@@ -92,6 +92,10 @@ Desktop features from 0.1.4 that the app lacks, and why:
   rotation on the 300-page document, and measures memory after a 22.5 MB
   document with two photo-sized pictures (`large-photos.docx`, made by the
   test file provider). The mutation workflow can run one suite.
+- #16: the native library exports only its JNI entry point. The release
+  APK went from 3,352,010 to 1,540,690 bytes, the arm64 library from
+  1,122,384 to 426,032, and the arm64 download from 735,329 to 535,974.
+  CI checks the exports (`scripts/check-native-exports.sh`).
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.

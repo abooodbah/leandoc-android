@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Export a misspelt JNI name",
+    "suite": "device",
+    "tests": "ReaderTest",
+    "file": "app/src/main/cpp/exports.map",
+    "old": "    Java_io_github_abooodbah_leandoc_DocCore_open;",
+    "new": "    Java_io_github_abooodbah_leandoc_DocCore_opne;"
+  }
+]
