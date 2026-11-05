@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Keep the package after serving it",
+    "suite": "device",
+    "tests": "ReaderTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "        current.packageBytes = null\n",
+    "new": ""
+  },
+  {
+    "name": "Serve nothing when the package is gone and do not read the file again",
+    "suite": "device",
+    "tests": "ReaderTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "                // The page was replaced after the package was dropped.\n                source?.let(::open)",
+    "new": "                // The page was replaced after the package was dropped.\n                Unit"
+  }
+]

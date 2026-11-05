@@ -187,6 +187,27 @@ class ReaderTest {
     }
 
     @Test
+    fun theAppLetsGoOfThePackageOnceThePageHasIt() {
+        Reader.open(FixtureProvider.LARGE_PHOTOS).use { scenario ->
+            Reader.waitForDocument(scenario, timeoutMs = 120_000)
+            var held = -1
+            scenario.onActivity { held = it.heldPackageBytesForTest }
+            assertEquals("bytes of the 24 MB package the app still holds", 0, held)
+        }
+    }
+
+    @Test
+    fun aReloadAfterThePackageWasServedShowsTheDocumentAgain() {
+        Reader.open("features/styles.docx").use { scenario ->
+            Reader.waitForDocument(scenario)
+            Reader.js(scenario, "document.documentElement.dataset.renderState = 'stale'")
+            Reader.js(scenario, "window.webkit.messageHandlers.leandoc.postMessage(JSON.stringify({type: 'reload'}))")
+            Reader.waitForDocument(scenario)
+            assertTrue(bodyText(scenario).contains("Styles and inheritance"))
+        }
+    }
+
+    @Test
     fun readingViewReflowsTheDocument() {
         Reader.open("features/styles.docx").use { scenario ->
             Reader.waitForDocument(scenario)

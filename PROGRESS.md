@@ -32,7 +32,7 @@ Pull requests, in order:
 | 1 | #15 Measure reader actions and a large document on the emulator | merged |
 | 1 | #16 Export only the JNI entry point from the native library | merged |
 | 1 | #17 Leave the Kotlin metadata files out of the APK | merged |
-| 1 | Let go of the package once the page has it | next |
+| 1 | #18 Let go of the package once the page has it | merged |
 | 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
 | 3 | Five themes and the theme dot; settings button and sheet | planned |
 | 4 | Port LeanDoc desktop 0.2.0's reader | waits for the desktop merge |
@@ -50,7 +50,7 @@ typed letter to the second animation frame after it. Run 41981911611 for
 | --- | --- | --- | --- | --- |
 | Native library: the C++ runtime is linked statically and all its symbols were exported | Exported code cannot be dropped by `--gc-sections` | 1,977 exported symbols; arm64 `libleandoc.so` 1,122,384 bytes; APK 3,352,010 bytes; arm64 download 735,329 bytes | Export only the JNI entry point (version script) | fixed in #16: 1 symbol; 426,032; 1,540,690; 535,974 |
 | Kotlin compiler metadata in the APK | Files only kotlin-reflect reads | 13,728 bytes of the APK, 13,345 of the arm64 download | Leave them out | fixed in #17: 13,728 bytes less, measured on main before #16 |
-| The app keeps the sanitized package after the page fetched it | The document's size in the Java heap for as long as it is open; the page keeps its own copy | Java heap 25,120 KB, app PSS 151,833 KB after the 22.5 MB `large-photos.docx` | Drop it once served; a new page reads the file again | next pull request |
+| The app keeps the sanitized package after the page fetched it | The document's size in the Java heap for as long as it is open; the page keeps its own copy | Java heap 25,120 KB, app PSS 151,833 KB after the 22.5 MB `large-photos.docx` | Drop it once served; a new page reads the file again | fixed in #18: Java heap 1,352 KB |
 | Open: WebView, page and document | Cold start to the first page | First frame 145 ms over the empty app; drawn 1,282 ms over its first frame (`styles.docx`); 300 pages drawn in 3,634 ms. WebView created at 211 ms, page loaded at 677, drawn at 1,597 | No clear win: the page's scripts load in about 470 ms and docx-preview renders in about 900. Budget is for a phone (under 1 s); see the phone test | for you to decide |
 | Scroll | The reader's scroll handler filters the outline entries and reads page boxes on every scroll event | 87 to 90% janky frames on the software GPU, the same on main and branch | None measurable without a GPU | phone test |
 | Find on every keystroke (desktop's known issue) | Searches the whole document per letter | 23 ms per letter (median of 7), slowest 32 ms, 300 pages | Small here; the desktop's fix comes with the port | after the port |
@@ -98,6 +98,14 @@ Desktop features from 0.1.4 that the app lacks, and why:
   CI checks the exports (`scripts/check-native-exports.sh`).
 - #17: the Kotlin compiler's metadata files are left out of the APK
   (13,728 bytes); CI checks it (`scripts/check-apk-extras.sh`).
+- #18: the app lets go of the sanitized package once the page has it.
+  After the 22.5 MB `large-photos.docx` the app's Java heap went from
+  25,080 to 1,300 KB and the total PSS with the renderer from 221,846 to
+  197,739 KB (run 41987890797). The app's PSS after that document varies by
+  tens of MB between runs of the same build, so the Java heap is the steadier
+  number. The time to draw that document is one sample per build and varied
+  (2,112 and 3,143 ms in that run, 1,744 and 1,909 in an earlier one); not
+  measured further.
 - #19: on a phone the outline opens as a sheet from the bottom edge (the
   desktop page hides it below 760 px), with the current section highlighted
   and kept in view; a tapped entry jumps and closes it; back, the scrim,
