@@ -5,8 +5,10 @@ that should notice, records the first failing test, and restores the file.
     python3 scripts/mutations.py mutations/reader.json device   # needs an emulator
 
 Each entry names a file, an exact text to replace (it must occur once), the
-replacement, and which suite should catch it ("jvm" or "device"). The result
-is a Markdown table on standard output."""
+replacement, and which suite should catch it ("jvm" or "device"). A device
+entry may name "tests", a comma-separated list of test classes, to run only
+those instead of the whole instrumented suite. The result is a Markdown
+table on standard output."""
 
 import json
 import pathlib
@@ -47,6 +49,9 @@ def main():
             print(f"| {entry['name']} | {entry['file']} | pattern not found once | - |", flush=True)
             continue
         command, results = SUITES[wanted]
+        if wanted == "device" and entry.get("tests"):
+            classes = ",".join(f"io.github.abooodbah.leandoc.{name.strip()}" for name in entry["tests"].split(","))
+            command = command + [f"-Pandroid.testInstrumentationRunnerArguments.class={classes}"]
         subprocess.run(["rm", "-rf", str(ROOT / results)])
         path.write_text(original.replace(entry["old"], entry["new"]))
         try:
