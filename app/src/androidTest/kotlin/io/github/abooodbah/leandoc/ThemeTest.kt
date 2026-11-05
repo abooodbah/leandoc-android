@@ -118,6 +118,23 @@ class ThemeTest {
     }
 
     @Test
+    fun tabStaysInsideAnOpenSheet() = open { scenario ->
+        Reader.js(scenario, "document.getElementById('settingsButton').click()")
+        Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
+        Focus.ensure()
+        val outside = mutableListOf<String>()
+        repeat(12) { step ->
+            Reader.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
+            val where = Reader.js(
+                scenario,
+                "(function () { var a = document.activeElement; return a && a.closest('#settingsSheet') ? '' : (a ? (a.id || a.tagName) : 'none'); })()",
+            ) as String
+            if (where.isNotEmpty()) outside += "Tab ${step + 1}: $where"
+        }
+        assertEquals("focus left the sheet", emptyList<String>(), outside)
+    }
+
+    @Test
     fun withoutADocumentTheSheetOffersTheThemeOnly() {
         val launch = Reader.context.packageManager.getLaunchIntentForPackage(Reader.context.packageName)!!
         ActivityScenario.launch<MainActivity>(launch).use { scenario ->
