@@ -300,32 +300,46 @@ for label in "${LABELS[@]}"; do
     log "$label actions not measured, another window has focus: $focus"
     continue
   fi
-  adb logcat -c
-  for keys in "KEYCODE_EQUALS" "KEYCODE_EQUALS" "KEYCODE_MINUS" "KEYCODE_MINUS"; do
-    key KEYCODE_CTRL_LEFT $keys
-    sleep 3
+  # In one run the first keys after the start reached the page but no time
+  # came back; each step is tried a second time when it reports nothing.
+  for attempt in 1 2; do
+    adb logcat -c
+    for keys in "KEYCODE_EQUALS" "KEYCODE_EQUALS" "KEYCODE_MINUS" "KEYCODE_MINUS"; do
+      key KEYCODE_CTRL_LEFT $keys
+      sleep 3
+    done
+    ZOOM_MS[$label]=$(timing_lines | action_ms zoom | median)
+    [ "${ZOOM_MS[$label]}" = NA ] || break
+    log "$label zoom: no times on attempt $attempt"
   done
-  ZOOM_MS[$label]=$(timing_lines | action_ms zoom | median)
   # Back to the automatic zoom, which follows a rotation.
   key KEYCODE_CTRL_LEFT KEYCODE_0
   sleep 3
-  adb logcat -c
-  for _ in 1 2 3; do
-    key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_T
-    sleep 3
+  for attempt in 1 2; do
+    adb logcat -c
+    for _ in 1 2 3; do
+      key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_T
+      sleep 3
+    done
+    THEME_MS[$label]=$(timing_lines | action_ms theme | median)
+    [ "${THEME_MS[$label]}" = NA ] || break
+    log "$label theme: no times on attempt $attempt"
   done
-  THEME_MS[$label]=$(timing_lines | action_ms theme | median)
-  key KEYCODE_CTRL_LEFT KEYCODE_F
-  sleep 2
-  adb logcat -c
-  for letter in s e c t i o n; do
-    adb shell input text "$letter" || log "input text failed"
+  for attempt in 1 2; do
+    key KEYCODE_CTRL_LEFT KEYCODE_F
     sleep 2
+    adb logcat -c
+    for letter in s e c t i o n; do
+      adb shell input text "$letter" || log "input text failed"
+      sleep 2
+    done
+    FIND_MS[$label]=$(timing_lines | action_ms find | median)
+    FIND_MAX[$label]=$(timing_lines | action_ms find | sort -n | tail -n 1)
+    adb shell input keyevent KEYCODE_ESCAPE || true
+    sleep 2
+    [ "${FIND_MS[$label]}" = NA ] || break
+    log "$label find: no times on attempt $attempt"
   done
-  FIND_MS[$label]=$(timing_lines | action_ms find | median)
-  FIND_MAX[$label]=$(timing_lines | action_ms find | sort -n | tail -n 1)
-  adb shell input keyevent KEYCODE_ESCAPE || true
-  sleep 2
   adb logcat -c
   key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_V
   wait_renders 1
