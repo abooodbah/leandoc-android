@@ -92,6 +92,14 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = false
     }
+
+    // Only kotlin-reflect reads the compiler's metadata, and the app does not
+    // use it. About 12 KB of the release APK.
+    packaging {
+        resources {
+            excludes += listOf("kotlin/**", "kotlin-tooling-metadata.json", "META-INF/*.kotlin_module")
+        }
+    }
 }
 
 kotlin {

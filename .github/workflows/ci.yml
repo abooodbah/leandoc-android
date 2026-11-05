@@ -55,6 +55,9 @@ jobs:
       - name: Check the native library exports only its JNI entry points
         run: bash scripts/check-native-exports.sh
 
+      - name: Check the release APK carries no Kotlin metadata
+        run: bash scripts/check-apk-extras.sh
+
       - name: Report sizes
         run: |
           {
