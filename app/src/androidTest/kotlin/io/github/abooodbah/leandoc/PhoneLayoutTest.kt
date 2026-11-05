@@ -133,6 +133,9 @@ class PhoneLayoutTest {
               if (!rows.some(function (row) { return Math.abs(row - middle) < 12; })) rows.push(middle);
             });
             if (rows.length > $maxRows) problems.push('the controls take ' + rows.length + ' rows');
+            // The theme button shows its dot only; its name says the theme.
+            var theme = document.getElementById('themeButton').getBoundingClientRect();
+            if (theme.width > 48) problems.push('the theme button is ' + Math.round(theme.width) + ' px wide');
             ['viewPage', 'viewReading'].forEach(function (id) {
               if (document.getElementById(id).getClientRects().length > 0) problems.push(id + ' is in the toolbar');
             });

@@ -72,6 +72,10 @@ class ThemeTest {
 
     @Test
     fun theCurrentSectionLooksLikeLeanMarksInEveryTheme() = open("features/long-300-pages.docx") { scenario ->
+        // A section (level 2) rather than the first part (level 1, bold in
+        // the list whether current or not).
+        Reader.js(scenario, "(function () { var s = document.getElementById('docScroller'); s.scrollTop = (s.scrollHeight - s.clientHeight) * 0.4; })()")
+        Reader.waitFor(scenario, "(document.querySelector('#outlineList a[aria-current=\"location\"]') || {dataset: {}}).dataset.level === '2'")
         for ((theme, expected) in TOKENS) {
             choose(scenario, theme)
             Reader.js(scenario, "document.getElementById('outlineButton').click()")
