@@ -17,11 +17,29 @@ class ReaderProtocolTest {
         assertEquals(ReaderCommand.SetTheme("dark"), ReaderCommand.parse("""{"type":"setTheme","theme":"dark"}"""))
         assertEquals(ReaderCommand.SetView("reading"), ReaderCommand.parse("""{"type":"setView","view":"reading"}"""))
         assertEquals(ReaderCommand.Link("https://a.example/"), ReaderCommand.parse("""{"type":"link","href":"https://a.example/"}"""))
-        assertEquals(ReaderCommand.Rendered(4, 12), ReaderCommand.parse("""{"type":"rendered","tab":1,"generation":4,"pages":12,"ms":30}"""))
+        assertEquals(ReaderCommand.Rendered(4, 12, 30), ReaderCommand.parse("""{"type":"rendered","tab":1,"generation":4,"pages":12,"ms":30}"""))
         assertEquals(
             ReaderCommand.RenderFailed(4, "boom"),
             ReaderCommand.parse("""{"type":"renderFailed","tab":1,"generation":4,"message":"boom"}"""),
         )
+    }
+
+    @Test
+    fun actionTimesFromThePage() {
+        for (action in listOf("find", "zoom", "theme", "resize")) {
+            assertEquals(
+                ReaderCommand.Timing(action, 125),
+                ReaderCommand.parse("""{"type":"timing","action":"$action","ms":125}"""),
+            )
+        }
+        for (text in listOf(
+            """{"type":"timing","action":"other","ms":5}""",
+            """{"type":"timing","action":"find"}""",
+            """{"type":"timing","action":"find","ms":-1}""",
+            """{"type":"timing","action":"find","ms":"5"}""",
+        )) {
+            assertNull(text, ReaderCommand.parse(text))
+        }
     }
 
     @Test
