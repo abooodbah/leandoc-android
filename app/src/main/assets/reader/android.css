@@ -4,11 +4,12 @@
 
 /* LeanMark's five themes. Light and Dark are the desktop page's own; Dim
    and Dusk take LeanMark 0.6.0's values (assets/reader.css) for every token
-   the two apps share. The tokens only LeanDoc has follow Dark's pattern:
-   --surface-hover lies between --surface and --surface-muted, --border-strong
-   and --doc-canvas are LeanMark's --quote-rule and --code-canvas, and the
-   notice colours are an amber tint of the theme. Each block sets every
-   token the dark blocks set, so it wins over the system-dark block. */
+   the two apps share. The tokens only LeanDoc has take the LeanMark token
+   that plays their part, as LeanDoc desktop's Dim and Dusk do (leandoc pull
+   request 27): hover is the muted surface, the strong border is the quote
+   rule, the document canvas is the code canvas, and the notice is the muted
+   surface with the border and Dark's amber. Each block sets every token the
+   dark blocks set, so it wins over the system-dark block. */
 /* Dark's borders are LeanMark's --neutral-800; the desktop page had #2f2c27. */
 :root[data-theme="dark"] {
   --border: #2b2924;
@@ -25,7 +26,7 @@
   --canvas: #1e2023;
   --surface: #25282c;
   --surface-muted: #2d3035;
-  --surface-hover: #292c30;
+  --surface-hover: #2d3035;
   --border: #393d43;
   --border-strong: #4a4f56;
   --text-primary: #c8ccd2;
@@ -37,10 +38,10 @@
   --selection: #34486a;
   --doc-canvas: #282b30;
   --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
-  --notice-surface: #2b2a25;
-  --notice-border: #48412f;
-  --notice-icon: #d9a54a;
-  --warning-text: #e2b866;
+  --notice-surface: #2d3035;
+  --notice-border: #393d43;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
   --wordmark-surface: #c8ccd2;
   --wordmark-ink: #1e2023;
 }
@@ -50,7 +51,7 @@
   --canvas: #221e19;
   --surface: #29241e;
   --surface-muted: #322c25;
-  --surface-hover: #2d2822;
+  --surface-hover: #322c25;
   --border: #3f3830;
   --border-strong: #574c3f;
   --text-primary: #d4c8b4;
@@ -62,10 +63,10 @@
   --selection: #4d3f2c;
   --doc-canvas: #2c2721;
   --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
-  --notice-surface: #302719;
-  --notice-border: #4d3e26;
-  --notice-icon: #dca04a;
-  --warning-text: #e8c078;
+  --notice-surface: #322c25;
+  --notice-border: #3f3830;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
   --wordmark-surface: #d4c8b4;
   --wordmark-ink: #221e19;
 }
