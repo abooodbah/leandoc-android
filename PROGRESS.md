@@ -59,7 +59,7 @@ typed letter to the second animation frame after it. Run 41981911611 for
 | View switch (desktop's known issue) | On Android the page keeps the package and parses it again; the app does not read the file again | 838 ms render (median of 2, page and reading view, 300 pages) | The desktop's fix (reuse the parsed document) came with the port | ported in #21 |
 | Theme switch | Restyles the whole page | 84 ms to the frame (median of 3) | None | none |
 | Rotation | The activity is kept; the fit zoom changes and the page is laid out again after the reader's 150 ms settle | 340 ms to the frame with the new zoom (median of 2) | None | none |
-| System dark mode switch while reading | The activity is created again: the file is read and cleaned again, the page reloads, and the reading position is lost | not measured yet | Keep the WebView, or keep the position | to measure |
+| System dark mode switch while reading | The activity is created again: the file is read and cleaned again, the page reloads, and the reading position is lost | 2,789 to 3,435 ms to the document drawn again (one sample per run) | Keep the WebView (uiMode in configChanges) | fixed in #22 |
 | Memory while opening | The file, the core's copy and the package are in memory together | not measured separately | The core needs the bytes; none now | none |
 | Dead code | The reader page is the desktop's file: tabs, recent files and keyboard shortcuts stay, unused on a phone | none removed | Keep the desktop file unchanged | none |
 | Dependencies | The app has no runtime libraries; tests use JUnit, org.json and AndroidX Test | none unused | none | none |
@@ -131,6 +131,9 @@ Desktop features from 0.1.4 that the app lacks, and why:
   went), Find after a 120 ms pause in typing, zoom steps that arrive
   together laid out once, and a switch back to a view that reuses the
   parsed document. The patch now adds only the theme dot and its name.
+- #22: the system's light and dark switch keeps the activity, the WebView,
+  the document and the reading position. System recolours the page and the
+  bars in place; a chosen theme does not change.
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.

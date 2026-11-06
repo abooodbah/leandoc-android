@@ -51,11 +51,15 @@ class ReaderProtocolTest {
         assertEquals(ReaderCommand.Sheet(false), ReaderCommand.parse("""{"type":"sheet","open":false}"""))
         assertNull(ReaderCommand.parse("""{"type":"sheet"}"""))
         assertNull(ReaderCommand.parse("""{"type":"sheet","open":"yes"}"""))
-        // android-host.js matches the whole text of this message.
+        // android-host.js matches the whole text of these messages.
+        assertTrue(bridge0().contains("'" + HostMessages.systemScheme(true) + "'"))
+        assertTrue(bridge0().contains("'" + HostMessages.systemScheme(false) + "'"))
         assertEquals("""{"type":"closeSheet"}""", HostMessages.closeSheet())
         val bridge = File("src/main/assets/reader/android-host.js").readText()
         assertTrue(bridge.contains("var CLOSE_SHEET = '" + HostMessages.closeSheet() + "';"))
     }
+
+    private fun bridge0() = File("src/main/assets/reader/android-host.js").readText()
 
     @Test
     fun badOrUnknownCommandsAreIgnored() {
