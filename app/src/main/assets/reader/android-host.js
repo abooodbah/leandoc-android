@@ -114,11 +114,26 @@
         timeAction(action, performance.now());
       }
     }, true);
+    // The reader searches after a short pause in typing, so a letter is
+    // timed to the frame after the match count changes.
+    var findStarted = 0;
     window.addEventListener("input", function (event) {
       if (event.target && event.target.id === "findInput") {
-        timeAction("find", performance.now());
+        findStarted = performance.now();
       }
     }, true);
+    document.addEventListener("DOMContentLoaded", function () {
+      var count = document.getElementById("findCount");
+      if (count && window.MutationObserver) {
+        new MutationObserver(function () {
+          if (findStarted) {
+            var started = findStarted;
+            findStarted = 0;
+            timeAction("find", started);
+          }
+        }).observe(count, { childList: true, characterData: true, subtree: true });
+      }
+    });
 
     var resizeStarted = 0;
     var resizeDrawn = 0;
@@ -569,33 +584,7 @@
     }
   }, true);
 
-  // The reader picks the current section in the first frame after each
-  // scroll event. After a long jump, the pages that come into view are still
-  // waiting to be laid out in that frame (they use content-visibility), so
-  // their headings are not where they will be, and the highlight stayed on a
-  // section several pages away until the next scroll. Once scrolling stops,
-  // the reader's scroll handlers run once more, on the laid-out pages.
-  function recheckAfterScrolling() {
-    var scroller = document.getElementById("docScroller");
-    if (!scroller) {
-      return;
-    }
-    var timer = 0;
-    scroller.addEventListener("scroll", function (event) {
-      if (!event.isTrusted) {
-        return;
-      }
-      window.clearTimeout(timer);
-      timer = window.setTimeout(function () {
-        afterNextFrame(function () {
-          scroller.dispatchEvent(new Event("scroll"));
-        });
-      }, 120);
-    }, { passive: true });
-  }
-
   document.addEventListener("DOMContentLoaded", function () {
-    recheckAfterScrolling();
     var toolbar = document.querySelector(".toolbar");
     var identity = document.querySelector(".identity");
     var moved = ["themeButton", "editorButton", "openButton"].map(function (id) {

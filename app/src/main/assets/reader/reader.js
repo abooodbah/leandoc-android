@@ -68,7 +68,8 @@
   var current = null;
   var displayed = false;
   var renderSerial = 0;
-  // Only the active tab's package is kept, for view switches.
+  // Only the active tab's package is kept, for view switches, with the
+  // parsed model of each view it was shown in (see modelFor).
   var packageCache = null;
   var blobUrls = [];
   // Each title-page section's header and footer for its later pages (see
@@ -91,6 +92,12 @@
   // jump, so an exact position cannot tell.
   var pinnedOutline = null;
   var search = { matches: [], index: -1, marks: false };
+  // Find runs after a short pause in typing, as in LeanMark. Each search
+  // walks the whole document and repaints every match: one search per key
+  // held a 300-page report for up to 0.8 s after each key in WebKitGTK.
+  // Enter, F3, and Escape act on a waiting search at once.
+  var SEARCH_PAUSE_MS = 120;
+  var searchTimer = 0;
   var toastTimer = 0;
   var scrollFrame = 0;
   var resizeTimer = 0;
@@ -163,34 +170,18 @@
 
   // Theme
 
-  // LeanMark's five themes, in the theme button's order. Dim and Dusk are
-  // the softer dark themes.
-  var themeCycle = ["system", "light", "dark", "dim", "dusk"];
-
-  function titleCase(name) {
-    return name.charAt(0).toUpperCase() + name.slice(1);
-  }
-
-  // The theme whose colours are on screen: System shows Light or Dark.
-  function shownTheme(theme) {
-    return theme === "system" ? (systemTheme.matches ? "dark" : "light") : theme;
-  }
-
-  // "Dusk", or "System (Dark)" so the name never depends on colour alone.
-  function themeDisplayName(theme) {
-    return theme === "system"
-      ? "System (" + titleCase(shownTheme(theme)) + ")"
-      : titleCase(theme);
-  }
+  // The theme button's order, as in LeanMark. Dim and Dusk are the softer
+  // dark themes.
+  var THEMES = ["system", "light", "dark", "dim", "dusk"];
 
   function applyTheme(theme) {
-    currentTheme = themeCycle.indexOf(theme) > 0 ? theme : "system";
+    currentTheme = THEMES.indexOf(theme) > 0 ? theme : "system";
     if (currentTheme === "system") {
       root.removeAttribute("data-theme");
     } else {
       root.setAttribute("data-theme", currentTheme);
     }
-    // The dot has one fixed colour per theme (.theme-swatch).
+    // LeanMark's dot, with one fixed colour per theme (.theme-swatch).
     elements.themeLabel.textContent = titleCase(currentTheme);
     elements.themeSwatch.dataset.swatch = currentTheme;
     var name = themeDisplayName(currentTheme);
@@ -199,8 +190,19 @@
     elements.themeButton.title = shortcut("Theme: " + name + " (Ctrl+Shift+T)");
   }
 
+  function titleCase(name) {
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  // "Dusk", or "System (Dark)" so the name never depends on colour alone.
+  function themeDisplayName(theme) {
+    return theme === "system"
+      ? "System (" + (systemTheme.matches ? "Dark" : "Light") + ")"
+      : titleCase(theme);
+  }
+
   function cycleTheme() {
-    var next = themeCycle[(themeCycle.indexOf(currentTheme) + 1) % themeCycle.length];
+    var next = THEMES[(THEMES.indexOf(currentTheme) + 1) % THEMES.length];
     applyTheme(next);
     post({ type: "setTheme", theme: next });
   }
@@ -528,7 +530,7 @@
       if (serial !== renderSerial) {
         return null;
       }
-      packageCache = { tab: expected.tab, generation: expected.generation, buffer: buffer };
+      packageCache = { tab: expected.tab, generation: expected.generation, buffer: buffer, models: {} };
       return renderPackage(serial, ratio, started, true);
     }).catch(function (error) {
       if (serial === renderSerial) {
@@ -558,14 +560,64 @@
     });
   }
 
-  function renderPackage(serial, ratio, started, firstRender) {
-    var options = renderOptions();
-    var view = currentView;
-    var expected = current;
+  // A view switch renders from the document that view parsed before, while
+  // the document is open, instead of unzipping and parsing the package again:
+  // the parse was 186 to 383 ms of a 900 to 1,150 ms switch for a 300-page
+  // report in WebKitGTK. The parse depends on the view (reading view ignores
+  // cell widths), so each view keeps its own. A render changes the model it is
+  // given (docx-preview splits paragraphs at page breaks and merges styles
+  // into their children), so each view keeps a copy of every part's data as
+  // the model fixes left it, and each render starts from a fresh copy of it.
+  // The copy is one structured clone, so objects shared between parts stay
+  // shared. Between renders only the copy is kept. Only renders for a view
+  // switch keep one: a document that is only opened costs no extra memory.
+  var MODEL_SKIP = { _package: true, _documentParser: true, _xmlDocument: true, rels: true, path: true };
+
+  function saveModel(doc) {
+    var parts = (doc.parts || []).filter(Boolean);
+    try {
+      var data = parts.map(function (part) {
+        var values = {};
+        Object.keys(part).forEach(function (key) {
+          if (!MODEL_SKIP[key]) {
+            values[key] = part[key];
+          }
+        });
+        return values;
+      });
+      return { parts: parts, data: structuredClone(data) };
+    } catch (_error) {
+      // Something the browser cannot copy: this view parses again next time.
+      return null;
+    }
+  }
+
+  function restoreModel(saved) {
+    var copies = structuredClone(saved.data);
+    saved.parts.forEach(function (part, index) {
+      Object.assign(part, copies[index]);
+    });
+  }
+
+  // The rendered model is not needed once the pages exist; the copy is.
+  function releaseModel(saved) {
+    saved.parts.forEach(function (part, index) {
+      Object.keys(saved.data[index]).forEach(function (key) {
+        part[key] = null;
+      });
+    });
+  }
+
+  // The parsed and fixed model for the view, from this document's earlier
+  // parse when it has one.
+  function modelFor(cache, view, options, serial, keep) {
+    var known = cache.models[view];
+    if (known) {
+      restoreModel(known.saved);
+      return Promise.resolve(known);
+    }
     var parsed = null;
-    var hyphenate = false;
-    var titleSections = [];
-    return window.docx.parseAsync(packageCache.buffer, options).then(function (result) {
+    return window.docx.parseAsync(cache.buffer, options).then(function (result) {
       parsed = result;
       return yieldToPage();
     }).then(function () {
@@ -573,15 +625,37 @@
         return null;
       }
       var prepared = Fixups.prepareModel(parsed);
-      hyphenate = prepared.autoHyphenation;
-      titleSections = prepared.titleSections || [];
+      var entry = {
+        doc: parsed,
+        hyphenate: prepared.autoHyphenation,
+        titleSections: prepared.titleSections || [],
+        saved: keep ? saveModel(parsed) : null
+      };
+      if (entry.saved && packageCache === cache) {
+        cache.models[view] = entry;
+      }
+      return entry;
+    });
+  }
+
+  function renderPackage(serial, ratio, started, firstRender) {
+    var options = renderOptions();
+    var view = currentView;
+    var expected = current;
+    return modelFor(packageCache, view, options, serial, !firstRender).then(function (model) {
+      if (!model) {
+        return null;
+      }
       return yieldToPage().then(function () {
         if (serial !== renderSerial) {
           return null;
         }
-        return window.docx.renderDocument(parsed, options).then(function (nodes) {
-          return renderTitleChrome(parsed, titleSections, options).then(function (chrome) {
+        return window.docx.renderDocument(model.doc, options).then(function (nodes) {
+          return renderTitleChrome(model.doc, model.titleSections, options).then(function (chrome) {
             titleChrome = chrome;
+            if (model.saved) {
+              releaseModel(model.saved);
+            }
             return nodes;
           });
         });
@@ -593,7 +667,7 @@
           revokeBlobUrls(collectBlobUrls(nodes));
           return null;
         }
-        return attachDocument(nodes, view, serial, hyphenate).then(function (attached) {
+        return attachDocument(nodes, view, serial, model.hyphenate).then(function (attached) {
           if (attached) {
             finishRender(expected, ratio, started, firstRender, attached.movedWhileLoading);
           }
@@ -2757,6 +2831,22 @@
     }
   }
 
+  // After a long jump (the scroll bar, Find, Home or End) the pages that come
+  // into view are still skipped by content-visibility in the first frame, so
+  // their headings report places they do not have yet, and the outline marked
+  // a section several entries off with no later scroll to correct it. Once
+  // scrolling stops, the current section is found again in the next frame.
+  var OUTLINE_SETTLE_MS = 120;
+  var outlineSettleTimer = 0;
+
+  function scheduleOutlineSettle() {
+    window.clearTimeout(outlineSettleTimer);
+    outlineSettleTimer = window.setTimeout(function () {
+      outlineSettleTimer = 0;
+      scheduleOutlineUpdate();
+    }, OUTLINE_SETTLE_MS);
+  }
+
   function goToOutlineEntry(index) {
     var entry = outlineEntries[index];
     if (!entry || !entry.target) {
@@ -2877,6 +2967,24 @@
     root.dataset.zoomMode = zoomMode;
   }
 
+  // Zoom steps that arrive together (Ctrl+wheel, a held key) are laid out
+  // once, in the next frame. Each layout of a long document is a full one:
+  // 182 to 210 ms for a 300-page report in WebKitGTK, and three steps in one
+  // frame took half a second. The label and buttons follow each step at once.
+  var zoomFrame = 0;
+
+  function requestZoom() {
+    updateZoomLabel(effectiveZoom());
+    if (!zoomFrame) {
+      root.setAttribute("data-zoom-pending", "");
+      zoomFrame = window.requestAnimationFrame(function () {
+        zoomFrame = 0;
+        root.removeAttribute("data-zoom-pending");
+        applyZoom(true);
+      });
+    }
+  }
+
   function applyZoom(keepPosition) {
     var factor = effectiveZoom();
     var ratio = keepPosition ? scrollRatio() : 0;
@@ -2925,7 +3033,7 @@
     }
     zoomMode = "fixed";
     zoomFactor = next;
-    applyZoom(true);
+    requestZoom();
   }
 
   function toggleFitWidth() {
@@ -2938,12 +3046,12 @@
     } else {
       zoomMode = "fit";
     }
-    applyZoom(true);
+    requestZoom();
   }
 
   function resetZoom() {
     zoomMode = "auto";
-    applyZoom(true);
+    requestZoom();
   }
 
   // Find
@@ -3137,6 +3245,28 @@
     }
   }
 
+  function cancelPendingSearch() {
+    if (!searchTimer) {
+      return false;
+    }
+    window.clearTimeout(searchTimer);
+    searchTimer = 0;
+    return true;
+  }
+
+  function scheduleSearch() {
+    cancelPendingSearch();
+    if (!elements.findInput.value.trim()) {
+      // Nothing to search for: the old matches go at once.
+      runSearch(true);
+      return;
+    }
+    searchTimer = window.setTimeout(function () {
+      searchTimer = 0;
+      runSearch(true);
+    }, SEARCH_PAUSE_MS);
+  }
+
   function moveSearch(direction) {
     if (elements.findInput.disabled) {
       return;
@@ -3144,6 +3274,13 @@
     if (!elements.findInput.value.trim()) {
       elements.findInput.focus();
       return;
+    }
+    if (cancelPendingSearch()) {
+      runSearch(true);
+      // The new search has already selected its first match.
+      if (!search.matches.length || direction > 0) {
+        return;
+      }
     }
     if (!search.matches.length) {
       runSearch(true);
@@ -3453,6 +3590,7 @@
     }
   });
   elements.docScroller.addEventListener("scroll", scheduleOutlineUpdate, { passive: true });
+  elements.docScroller.addEventListener("scroll", scheduleOutlineSettle, { passive: true });
   elements.docScroller.addEventListener("scroll", matchPagesNearWindow, { passive: true });
   elements.docScroller.addEventListener("blur", function () {
     elements.docScroller.classList.remove("quiet-focus");
@@ -3526,9 +3664,7 @@
     }
   });
 
-  elements.findInput.addEventListener("input", function () {
-    runSearch(true);
-  });
+  elements.findInput.addEventListener("input", scheduleSearch);
   elements.findInput.addEventListener("keydown", function (event) {
     if (event.key === "Enter") {
       event.preventDefault();

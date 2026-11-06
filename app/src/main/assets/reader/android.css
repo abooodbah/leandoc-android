@@ -10,66 +10,8 @@
    rule, the document canvas is the code canvas, and the notice is the muted
    surface with the border and Dark's amber. Each block sets every token the
    dark blocks set, so it wins over the system-dark block. */
-/* Dark's borders are LeanMark's --neutral-800; the desktop page had #2f2c27. */
-:root[data-theme="dark"] {
-  --border: #2b2924;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --border: #2b2924;
-  }
-}
-
-:root[data-theme="dim"] {
-  color-scheme: dark;
-  --canvas: #1e2023;
-  --surface: #25282c;
-  --surface-muted: #2d3035;
-  --surface-hover: #2d3035;
-  --border: #393d43;
-  --border-strong: #4a4f56;
-  --text-primary: #c8ccd2;
-  --text-secondary: #9ea4ac;
-  --text-disabled: #6c727a;
-  --ring: #6c9be0;
-  --link: #86aee6;
-  --link-hover: #a6c4ee;
-  --selection: #34486a;
-  --doc-canvas: #282b30;
-  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
-  --notice-surface: #2d3035;
-  --notice-border: #393d43;
-  --notice-icon: #f59e0b;
-  --warning-text: #fbbf24;
-  --wordmark-surface: #c8ccd2;
-  --wordmark-ink: #1e2023;
-}
-
-:root[data-theme="dusk"] {
-  color-scheme: dark;
-  --canvas: #221e19;
-  --surface: #29241e;
-  --surface-muted: #322c25;
-  --surface-hover: #322c25;
-  --border: #3f3830;
-  --border-strong: #574c3f;
-  --text-primary: #d4c8b4;
-  --text-secondary: #a99c87;
-  --text-disabled: #776c5c;
-  --ring: #c99a62;
-  --link: #e0a86e;
-  --link-hover: #ebc08f;
-  --selection: #4d3f2c;
-  --doc-canvas: #2c2721;
-  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
-  --notice-surface: #322c25;
-  --notice-border: #3f3830;
-  --notice-icon: #f59e0b;
-  --warning-text: #fbbf24;
-  --wordmark-surface: #d4c8b4;
-  --wordmark-ink: #221e19;
-}
+/* Dim and Dusk, with LeanMark's colours, and Dark's LeanMark border are in
+   the desktop page's reader.css since LeanDoc desktop's 0.2.0 work. */
 
 /* The theme button's dot, as in LeanMark: one fixed colour per theme, with
    the same grey ring in every theme. System is half Light and half Dark. */

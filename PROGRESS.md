@@ -35,7 +35,8 @@ Pull requests, in order:
 | 1 | #18 Let go of the package once the page has it | merged |
 | 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
 | 3 | #20 Five themes and the theme dot; settings button and sheet | merged |
-| 4 | Port LeanDoc desktop 0.2.0's reader | waits for the desktop merge |
+| 4 | #21 Port LeanDoc desktop's merged reader changes (Dim and Dusk, settle pass, find, zoom and view fixes) | merged |
+| 4 | Port the desktop's theme dot, page colour and highlight look | waits for the desktop merge |
 | 5 | Release 0.2.0 | last |
 
 ### Efficiency review
@@ -53,9 +54,9 @@ typed letter to the second animation frame after it. Run 41981911611 for
 | The app keeps the sanitized package after the page fetched it | The document's size in the Java heap for as long as it is open; the page keeps its own copy | Java heap 25,120 KB, app PSS 151,833 KB after the 22.5 MB `large-photos.docx` | Drop it once served; a new page reads the file again | fixed in #18: Java heap 1,352 KB |
 | Open: WebView, page and document | Cold start to the first page | First frame 145 ms over the empty app; drawn 1,282 ms over its first frame (`styles.docx`); 300 pages drawn in 3,634 ms. WebView created at 211 ms, page loaded at 677, drawn at 1,597 | No clear win: the page's scripts load in about 470 ms and docx-preview renders in about 900. Budget is for a phone (under 1 s); see the phone test | for you to decide |
 | Scroll | The reader's scroll handler filters the outline entries and reads page boxes on every scroll event | 87 to 90% janky frames on the software GPU, the same on main and branch | None measurable without a GPU | phone test |
-| Find on every keystroke (desktop's known issue) | Searches the whole document per letter | 23 ms per letter (median of 7), slowest 32 ms, 300 pages | Small here; the desktop's fix comes with the port | after the port |
+| Find on every keystroke (desktop's known issue) | Searches the whole document per letter | 23 ms per letter (median of 7), slowest 32 ms, 300 pages | Small here; the desktop's fix (a 120 ms pause) came with the port | ported in #21 |
 | Zoom step (desktop's known issue) | Lays out the document again | 34 ms to the frame (median of 4); pages out of view are skipped (content-visibility) | None needed on Android | none |
-| View switch (desktop's known issue) | On Android the page keeps the package and parses it again; the app does not read the file again | 838 ms render (median of 2, page and reading view, 300 pages) | The desktop's fix comes with the port | after the port |
+| View switch (desktop's known issue) | On Android the page keeps the package and parses it again; the app does not read the file again | 838 ms render (median of 2, page and reading view, 300 pages) | The desktop's fix (reuse the parsed document) came with the port | ported in #21 |
 | Theme switch | Restyles the whole page | 84 ms to the frame (median of 3) | None | none |
 | Rotation | The activity is kept; the fit zoom changes and the page is laid out again after the reader's 150 ms settle | 340 ms to the frame with the new zoom (median of 2) | None | none |
 | System dark mode switch while reading | The activity is created again: the file is read and cleaned again, the page reloads, and the reading position is lost | not measured yet | Keep the WebView, or keep the position | to measure |
@@ -124,6 +125,12 @@ Desktop features from 0.1.4 that the app lacks, and why:
   view switch is in the sheet and the controls take two rows down to
   320 dp. The reader's theme functions reach the desktop's reader.js
   through `scripts/android-reader.patch` until the desktop has them.
+- #21: the reader page from LeanDoc desktop main c43cd1c: Dim and Dusk in
+  reader.css (the same values as #20, so Android's copies went), the second
+  look for the current section once scrolling stops (Android's workaround
+  went), Find after a 120 ms pause in typing, zoom steps that arrive
+  together laid out once, and a switch back to a view that reuses the
+  parsed document. The patch now adds only the theme dot and its name.
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.

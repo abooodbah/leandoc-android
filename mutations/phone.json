@@ -75,8 +75,8 @@
     "name": "Skip the second look after scrolling stops",
     "suite": "device",
     "tests": "OutlineSheetTest",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "    recheckAfterScrolling();\n",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "  elements.docScroller.addEventListener(\"scroll\", scheduleOutlineSettle, { passive: true });\n",
     "new": ""
   },
   {
