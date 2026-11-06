@@ -15,6 +15,9 @@ sealed interface ReaderCommand {
     data object OpenInEditor : ReaderCommand
     data class SetTheme(val theme: String) : ReaderCommand
     data class SetView(val view: String) : ReaderCommand
+
+    /** The page's colour: "paper" (white, as printed) or "theme". */
+    data class SetPageColor(val pageColor: String) : ReaderCommand
     data class Link(val href: String) : ReaderCommand
     data class Rendered(val generation: Long, val pages: Long, val ms: Long) : ReaderCommand
     data class RenderFailed(val generation: Long, val message: String) : ReaderCommand
@@ -46,6 +49,10 @@ sealed interface ReaderCommand {
                 }
                 "setView" -> when (val view = message.optString("view")) {
                     "page", "reading" -> SetView(view)
+                    else -> null
+                }
+                "setPageColor" -> when (val color = message.optString("pageColor")) {
+                    "paper", "theme" -> SetPageColor(color)
                     else -> null
                 }
                 "link" -> message.optString("href").takeIf { it.isNotEmpty() && it.length <= MAX_LINK }

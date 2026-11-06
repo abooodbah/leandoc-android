@@ -36,7 +36,7 @@ Pull requests, in order:
 | 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
 | 3 | #20 Five themes and the theme dot; settings button and sheet | merged |
 | 4 | #21 Port LeanDoc desktop's merged reader changes (Dim and Dusk, settle pass, find, zoom and view fixes) | merged |
-| 4 | Port the desktop's theme dot, page colour and highlight look | waits for the desktop merge |
+| 4 | #23 Port the desktop's theme dot, settings panel, toolbar, page colour and highlight look | merged |
 | 5 | Release 0.2.0 | last |
 
 ### Efficiency review
@@ -134,6 +134,15 @@ Desktop features from 0.1.4 that the app lacks, and why:
 - #22: the system's light and dark switch keeps the activity, the WebView,
   the document and the reading position. System recolours the page and the
   bars in place; a chosen theme does not change.
+- #23: the reader page from LeanDoc desktop main a5c1a73: the theme dot
+  (#28), the settings panel with theme, view, page colour and zoom (#29),
+  the restyled toolbar (#30) and the page colour setting, white like paper
+  or the theme's colours (#31), and the highlight look matched to LeanMark
+  (#32), which replaces Android's copy. Android's own settings sheet and
+  `scripts/android-reader.patch` went. On a phone the desktop's panel is a
+  sheet at the bottom without the shortcut list, the document keeps its
+  width, back closes it, and the file name and the theme dot stay in the
+  toolbar. The app keeps the page colour (`pageColor`: `paper` or `theme`).
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.

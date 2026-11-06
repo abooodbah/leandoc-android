@@ -403,183 +403,31 @@
     return place;
   }
 
-  // The settings sheet: theme, view and zoom, as in LeanMark's settings
-  // panel. Each choice works through the reader's own controls and host
-  // messages, so the reader, the app and the sheet agree: a theme goes to
-  // the reader as the app sends it and to the app as the theme button does,
-  // the view and zoom buttons are the toolbar's.
-  var THEMES = ["system", "light", "dark", "dim", "dusk"];
-
-  function choice(group, value, text, swatch) {
-    var label = document.createElement("label");
-    label.className = "settings-choice";
-    var input = document.createElement("input");
-    input.type = "radio";
-    input.name = "settings-" + group;
-    input.value = value;
-    label.appendChild(input);
-    if (swatch) {
-      var dot = document.createElement("span");
-      dot.className = "theme-swatch";
-      dot.dataset.swatch = value;
-      dot.setAttribute("aria-hidden", "true");
-      label.appendChild(dot);
+  // The desktop's settings panel. On a phone it rises from the bottom like
+  // the outline sheet (android.css), without the keyboard shortcut list.
+  // The app hears when it opens, so back closes it, and the button is named
+  // for what it holds here.
+  function setUpSettingsPanel() {
+    var panel = document.getElementById("settingsPanel");
+    var button = document.getElementById("settingsButton");
+    if (!panel || !button) {
+      return;
     }
-    label.appendChild(document.createTextNode(text));
-    return label;
-  }
-
-  function fieldset(legend, children) {
-    var group = document.createElement("fieldset");
-    group.className = "settings-group";
-    var title = document.createElement("legend");
-    title.textContent = legend;
-    group.appendChild(title);
-    children.forEach(function (child) {
-      group.appendChild(child);
-    });
-    return group;
-  }
-
-  function setUpSettingsSheet(phone) {
-    var root = document.documentElement;
-    var zoomIn = document.getElementById("zoomIn");
-    var zoomOut = document.getElementById("zoomOut");
-    var zoomValue = document.getElementById("zoomValue");
-    var viewPage = document.getElementById("viewPage");
-    var viewReading = document.getElementById("viewReading");
-    var chrome = document.getElementById("chrome");
-    if (!zoomIn || !zoomOut || !zoomValue || !viewPage || !viewReading) {
-      return null;
-    }
-    var button = document.createElement("button");
-    button.id = "settingsButton";
-    button.type = "button";
-    button.className = "button button-ghost android-icon-button";
     button.setAttribute("aria-label", "Settings");
     button.title = "Settings";
-    // LeanMark's settings icon: three sliders.
-    var sliders = icon(["M2 4h6M11 4h3M2 8h2M7 8h7M2 12h7M12 12h2"]);
-    [[9.5, 4], [5.5, 8], [10.5, 12]].forEach(function (centre) {
-      var knob = document.createElementNS(SVG, "circle");
-      knob.setAttribute("cx", String(centre[0]));
-      knob.setAttribute("cy", String(centre[1]));
-      knob.setAttribute("r", "1.5");
-      sliders.appendChild(knob);
-    });
-    button.appendChild(sliders);
-
-    var themes = fieldset("Theme", THEMES.map(function (theme) {
-      return choice("theme", theme, theme.charAt(0).toUpperCase() + theme.slice(1), true);
-    }));
-    var views = fieldset("View", [choice("view", "page", "Page"), choice("view", "reading", "Reading")]);
-    var zoom = document.createElement("div");
-    zoom.className = "settings-group settings-zoom";
-    zoom.setAttribute("role", "group");
-    zoom.setAttribute("aria-labelledby", "settingsZoomLabel");
-    var zoomLabel = document.createElement("span");
-    zoomLabel.id = "settingsZoomLabel";
-    zoomLabel.className = "settings-label";
-    zoomLabel.textContent = "Zoom";
-    var out = document.createElement("button");
-    out.id = "settingsZoomOut";
-    out.type = "button";
-    out.className = "button button-secondary";
-    out.setAttribute("aria-label", "Zoom out");
-    out.appendChild(icon(["M3.5 8h9"]));
-    var value = document.createElement("output");
-    value.id = "settingsZoomValue";
-    value.className = "settings-zoom-value";
-    value.setAttribute("aria-live", "polite");
-    var into = document.createElement("button");
-    into.id = "settingsZoomIn";
-    into.type = "button";
-    into.className = "button button-secondary";
-    into.setAttribute("aria-label", "Zoom in");
-    into.appendChild(icon(["M3.5 8h9M8 3.5v9"]));
-    var fit = document.createElement("button");
-    fit.id = "settingsZoomFit";
-    fit.type = "button";
-    fit.className = "button button-secondary";
-    [zoomLabel, out, value, into, fit].forEach(function (child) {
-      zoom.appendChild(child);
-    });
-    var body = document.createElement("div");
-    body.className = "android-sheet-body";
-    [themes, views, zoom].forEach(function (child) {
-      body.appendChild(child);
-    });
-
-    function update() {
-      var theme = root.getAttribute("data-theme") || "system";
-      var view = root.dataset.view === "reading" ? "reading" : "page";
-      var hasDocument = root.hasAttribute("data-has-document");
-      body.querySelectorAll('input[name="settings-theme"]').forEach(function (input) {
-        input.checked = input.value === theme;
-      });
-      body.querySelectorAll('input[name="settings-view"]').forEach(function (input) {
-        input.checked = input.value === view;
-        input.disabled = !hasDocument;
-      });
-      value.textContent = hasDocument && root.dataset.zoom ? root.dataset.zoom + "%" : "";
-      out.disabled = !hasDocument || zoomOut.disabled;
-      into.disabled = !hasDocument || zoomIn.disabled;
-      fit.disabled = !hasDocument || view === "reading";
-      var fitted = root.dataset.zoomMode === "fit";
-      fit.textContent = fitted ? "100%" : "Fit width";
-      fit.setAttribute("aria-label", fitted ? "Zoom to 100%" : "Fit the page to the width");
-    }
-
-    var sheet = makeSheet("settings", "Settings", button, function () {
-      // Beside the document below the toolbar on a wide page; from the
-      // bottom edge on a phone.
-      sheet.element.style.top = phone.matches || !chrome ? "" : chrome.getBoundingClientRect().bottom + "px";
-      update();
-      var checked = body.querySelector('input[name="settings-theme"]:checked');
-      (checked || sheet.element.querySelector(".android-sheet-close")).focus({ preventScroll: true });
-    });
-    sheet.element.appendChild(body);
-
-    body.addEventListener("change", function (event) {
-      var input = event.target;
-      if (input.name === "settings-theme" && THEMES.indexOf(input.value) >= 0) {
-        // The reader shows it now; the app keeps it and colours its bars.
-        if (window.LeanDocHost) {
-          window.LeanDocHost.receive(JSON.stringify({ type: "theme", theme: input.value }));
-        }
-        send(JSON.stringify({ type: "setTheme", theme: input.value }));
-      } else if (input.name === "settings-view") {
-        (input.value === "reading" ? viewReading : viewPage).click();
-      }
-    });
-    out.addEventListener("click", function () {
-      zoomOut.click();
-    });
-    into.addEventListener("click", function () {
-      zoomIn.click();
-    });
-    fit.addEventListener("click", function () {
-      zoomValue.click();
-    });
     new MutationObserver(function () {
-      if (sheets.open === sheet) {
-        update();
-      }
-    }).observe(root, {
-      attributes: true,
-      attributeFilter: ["data-theme", "data-view", "data-zoom", "data-zoom-mode", "data-has-document"]
-    });
-    var closeOnResize = function () {
-      if (sheets.open === sheet) {
-        closeSheet(false);
-      }
-    };
-    if (phone.addEventListener) {
-      phone.addEventListener("change", closeOnResize);
-    } else if (phone.addListener) {
-      phone.addListener(closeOnResize);
+      tellApp(!panel.hidden);
+    }).observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+  }
+
+  function closeOpenSheet() {
+    var panel = document.getElementById("settingsPanel");
+    var close = document.getElementById("settingsClose");
+    if (panel && close && !panel.hidden) {
+      close.click();
+    } else {
+      closeSheet(true);
     }
-    return button;
   }
 
   // Escape closes an open sheet, and Tab goes round the sheet's controls
@@ -630,7 +478,7 @@
     }
     var toolbar = document.querySelector(".toolbar");
     var identity = document.querySelector(".identity");
-    var moved = ["themeButton", "editorButton", "openButton"].map(function (id) {
+    var moved = ["themeButton", "settingsButton", "editorButton", "openButton"].map(function (id) {
       return document.getElementById(id);
     }).filter(Boolean);
     if (!toolbar || !identity || !window.matchMedia) {
@@ -645,13 +493,7 @@
     var placeOutline = setUpOutlineSheet(function (button) {
       toolbar.insertBefore(button, search ? search.nextSibling : toolbar.firstChild);
     }, phone);
-    var settingsButton = setUpSettingsSheet(phone);
-    var themeButton = document.getElementById("themeButton");
-    if (settingsButton) {
-      // Beside the theme button, in the toolbar or beside the file name.
-      moved.splice(moved.indexOf(themeButton) + 1, 0, settingsButton);
-      toolbar.insertBefore(settingsButton, themeButton ? themeButton.nextSibling : null);
-    }
+    setUpSettingsPanel();
     function place() {
       if (phone.matches) {
         moved.forEach(function (button) { actions.appendChild(button); });
