@@ -30,7 +30,7 @@ sealed interface ReaderCommand {
 
     companion object {
         private const val MAX_LINK = 8192
-        private val TIMED_ACTIONS = setOf("find", "zoom", "theme", "resize")
+        private val TIMED_ACTIONS = setOf("find", "zoom", "theme", "resize", "scheme")
 
         fun parse(text: String): ReaderCommand? {
             val message = try {

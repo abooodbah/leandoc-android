@@ -38,6 +38,9 @@ object HostMessages {
     /** For android-host.js, which compares the whole text: back closes an open sheet. */
     fun closeSheet(): String = """{"type":"closeSheet"}"""
 
+    /** For android-host.js: whether the system is dark, which System shows. */
+    fun systemScheme(dark: Boolean): String = """{"type":"systemScheme","dark":$dark}"""
+
     fun status(message: String, tone: String = "info"): String =
         JSONObject().put("type", "status").put("message", message).put("tone", tone).toString()
 

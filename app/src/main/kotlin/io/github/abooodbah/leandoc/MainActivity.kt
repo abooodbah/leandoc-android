@@ -148,9 +148,13 @@ class MainActivity : Activity() {
         source?.let { outState.putString(STATE_URI, it.toString()) }
     }
 
+    // The system's light and dark switch arrives here too (uiMode in the
+    // manifest), so the document, the page and the reading position stay;
+    // only the colours of System follow.
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         applyBarColors()
+        send(HostMessages.systemScheme(isNight()))
     }
 
     override fun onDestroy() {
@@ -412,6 +416,7 @@ class MainActivity : Activity() {
                 phase("reader ready")
                 send(HostMessages.host(versionName()))
                 send(HostMessages.theme(theme, readerView, pageColor))
+                send(HostMessages.systemScheme(isNight()))
                 sendCurrentView()
             }
             ReaderCommand.Open -> pickDocument()

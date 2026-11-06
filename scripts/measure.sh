@@ -369,7 +369,8 @@ for label in "${LABELS[@]}"; do
   adb shell cmd uimode night yes >/dev/null 2>&1 || log "cmd uimode failed"
   NIGHT_MS[$label]=NA
   for _ in $(seq 1 900); do
-    night=$(timing_lines | sed -n 's/^phase drawn \([0-9][0-9]*\) ms$/\1/p' | head -n 1)
+    # A new activity logs "phase drawn"; a kept one, the page's "scheme" time.
+    night=$(timing_lines | sed -n 's/^phase drawn \([0-9][0-9]*\) ms$/\1/p; s/^action scheme \([0-9][0-9]*\) ms$/\1/p' | head -n 1)
     if [ -n "$night" ]; then NIGHT_MS[$label]=$night; break; fi
     sleep 0.1
   done
@@ -449,7 +450,7 @@ row() {
   row "Find, slowest letter of the 7 (ms)" "${find_max[@]}"
   row "View switch on $LARGE_NAME (render ms, median of 2)" "${view[@]}"
   row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 6)" "${resize[@]}"
-  row "System dark mode switched on $LARGE_NAME (ms from the new activity to the document drawn again)" "${night[@]}"
+  row "System dark mode switched on $LARGE_NAME (ms to the new colours: a new activity to its drawn document, or a kept page to its next frame)" "${night[@]}"
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
   row "90th percentile frame time (software GPU, not a budget check)" "${p90[@]}"
