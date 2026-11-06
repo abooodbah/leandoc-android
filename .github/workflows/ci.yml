@@ -287,14 +287,12 @@ jobs:
           ./gradlew --no-daemon :baseline:assembleRelease
           cp baseline/build/outputs/apk/release/baseline-release.apk measure/empty.apk
 
-      - name: Build the base branch
+      - name: Build v0.1.2 (measurement only)
         run: |
-          git worktree add ../base "origin/${{ github.base_ref }}"
-          if (cd ../base && ./gradlew --no-daemon -PdebugSignRelease assembleRelease); then
-            cp ../base/app/build/outputs/apk/release/app-release.apk measure/base.apk
-          else
-            echo "The base branch does not build a release APK."
-          fi
+          git worktree add ../old v0.1.2
+          (cd ../old && ./gradlew --no-daemon -PdebugSignRelease assembleRelease)
+          cp ../old/app/build/outputs/apk/release/app-release.apk measure/v012.apk
+          cp measure/branch.apk measure/main2.apk
 
       - name: Measure
         uses: reactivecircus/android-emulator-runner@v2
@@ -309,7 +307,7 @@ jobs:
           script: |
             df -h / && free -m
             adb install -r measure/fixtures.apk
-            bash -c 'set -o pipefail; if [ -f measure/base.apk ]; then base="base=measure/base.apk"; fi; scripts/measure.sh empty=measure/empty.apk $base branch=measure/branch.apk | tee measure/results.md'
+            bash -c 'set -o pipefail; ROUNDS=5 STARTS_PER_ROUND=3 scripts/measure.sh empty=measure/empty.apk v012=measure/v012.apk main=measure/branch.apk main2=measure/main2.apk | tee measure/results.md'
 
       - name: Summary
         if: always()
