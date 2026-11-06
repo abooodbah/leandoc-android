@@ -116,6 +116,9 @@
   --link: var(--accent-500);
   --link-hover: var(--accent-600);
   --selection: #cbdcff;
+  --find: #f8d66d;
+  --find-current: #ef9f27;
+  --find-text: var(--neutral-950);
   --doc-canvas: var(--neutral-100);
   --page-shadow: 0 1px 2px rgb(26 25 23 / 8%), 0 4px 18px rgb(26 25 23 / 9%);
   --notice-surface: #fdf8ef;
@@ -141,6 +144,9 @@
   --duration-short: 180ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --reading-measure: 36rem;
+  --settings-width: 300px;
+  /* Where the toolbar ends; reader.js sets it while the settings panel is open. */
+  --chrome-bottom: 57px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -158,6 +164,8 @@
     --link: #60a5fa;
     --link-hover: #93c5fd;
     --selection: #23468c;
+    --find: #735d1e;
+    --find-current: #b45309;
     --doc-canvas: #23211d;
     --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
     --notice-surface: #221d14;
@@ -183,6 +191,8 @@
   --link: #60a5fa;
   --link-hover: #93c5fd;
   --selection: #23468c;
+  --find: #735d1e;
+  --find-current: #b45309;
   --doc-canvas: #23211d;
   --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
   --notice-surface: #221d14;
@@ -215,6 +225,9 @@
   --link: #86aee6;
   --link-hover: #a6c4ee;
   --selection: #34486a;
+  --find: #5c4d1f;
+  --find-current: #7a5317;
+  --find-text: #e8e4dc;
   --doc-canvas: #282b30;
   --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
   --notice-surface: #2d3035;
@@ -240,6 +253,9 @@
   --link: #e0a86e;
   --link-hover: #ebc08f;
   --selection: #4d3f2c;
+  --find: #6a5420;
+  --find-current: #82561c;
+  --find-text: #f1e9db;
   --doc-canvas: #2c2721;
   --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
   --notice-surface: #322c25;
@@ -262,6 +278,8 @@
 .outline *,
 .state-pane,
 .state-pane *,
+.settings-panel,
+.settings-panel *,
 .status-toast {
   box-sizing: border-box;
 }
@@ -293,7 +311,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-:where(.chrome, .state-pane, .outline) :where(button, input) {
+:where(.chrome, .state-pane, .outline, .settings-panel) :where(button, input) {
   font: inherit;
   color: inherit;
 }
@@ -342,7 +360,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-5);
 }
 
 .identity,
@@ -370,14 +388,14 @@ body {
   color: var(--wordmark-ink);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .file-copy {
   min-width: 0;
   align-items: flex-start;
   flex-direction: column;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .file-copy strong,
@@ -406,7 +424,7 @@ body {
 }
 
 .file-copy span {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--text-secondary);
   font-size: 12px;
 }
@@ -418,11 +436,11 @@ body {
 
 .search-field {
   position: relative;
-  width: 220px;
-  height: 36px;
+  min-width: 220px;
+  height: 40px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--canvas);
   transition:
     border-color var(--duration-short) var(--ease-standard),
@@ -431,25 +449,14 @@ body {
 
 .search-field:focus-within {
   border-color: var(--accent-500);
-  box-shadow: 0 0 0 1px var(--accent-500);
-}
-
-.search-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  margin-left: var(--space-3);
-  fill: none;
-  stroke: var(--text-secondary);
-  stroke-linecap: round;
-  stroke-width: 1.5;
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .search-field input {
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
   border: 0;
   outline: 0;
   background: transparent;
@@ -471,19 +478,20 @@ body {
 
 #findCount {
   flex: 0 0 auto;
+  min-width: 52px;
   padding-right: var(--space-3);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   font-size: 12px;
+  text-align: right;
   white-space: nowrap;
 }
 
 .button {
   display: inline-flex;
-  height: 36px;
+  height: 40px;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
@@ -498,7 +506,7 @@ body {
 }
 
 .button:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: var(--surface-muted);
 }
 
 .button:disabled {
@@ -506,13 +514,8 @@ body {
   opacity: 0.45;
 }
 
-.button-ghost {
-  min-width: 72px;
-  color: var(--text-secondary);
-}
-
-.button-ghost:hover:not(:disabled) {
-  color: var(--text-primary);
+.button:active:not(:disabled) {
+  filter: brightness(0.9);
 }
 
 .button-secondary {
@@ -545,7 +548,7 @@ body {
 .segmented,
 .zoom {
   display: inline-flex;
-  height: 36px;
+  height: 40px;
   align-items: stretch;
   padding: 2px;
   border: 1px solid var(--border);
@@ -601,7 +604,7 @@ body {
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
 }
 
 .zoom-step:hover:not(:disabled),
@@ -659,6 +662,223 @@ body {
   text-underline-offset: 3px;
 }
 
+/* The theme button's dot, as in LeanMark: one fixed colour per theme with
+   the same grey ring in every theme, so the five dots look different on any
+   toolbar. The page colours of the three dark themes are too close to each
+   other and to the toolbar to tell apart at this size. System is half Light
+   and half Dark. */
+.theme-button {
+  gap: var(--space-2);
+}
+
+.theme-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1px solid #8c8c8c;
+  border-radius: 50%;
+  background: var(--swatch, #ffffff);
+}
+
+.theme-swatch[data-swatch="light"] { --swatch: #ffffff; }
+.theme-swatch[data-swatch="dark"] { --swatch: #000000; }
+.theme-swatch[data-swatch="dim"] { --swatch: #7f8a99; }
+.theme-swatch[data-swatch="dusk"] { --swatch: #c98f4f; }
+.theme-swatch[data-swatch="system"] {
+  background: linear-gradient(90deg, #ffffff 50%, #000000 50%);
+}
+
+/* Settings panel, as in LeanMark: beside the document, below the toolbar.
+   It is not modal: the reader keeps working, and Escape returns the focus. */
+
+.button-icon {
+  width: 40px;
+  padding: 0;
+}
+
+.button-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+}
+
+.button[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.panel-button {
+  display: inline-grid;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 var(--space-2);
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.panel-button:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.panel-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.panel-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+:root[data-settings-open] .reader,
+:root[data-settings-open] .state-pane {
+  margin-right: var(--settings-width);
+}
+
+.settings-panel {
+  position: fixed;
+  z-index: 30;
+  top: var(--chrome-bottom);
+  right: 0;
+  bottom: 0;
+  width: var(--settings-width);
+  max-width: 100%;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5) var(--space-8);
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settings-group {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  border: 0;
+}
+
+.settings-group legend,
+.settings-label {
+  display: block;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-choice {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.settings-choice input {
+  margin: 0;
+  accent-color: var(--link);
+}
+
+.settings-choice:has(input:disabled) {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.settings-zoom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-zoom .settings-label {
+  width: 100%;
+}
+
+.settings-zoom-value {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.shortcut-list h4 {
+  margin: var(--space-4) 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shortcut-list dl {
+  margin: 0;
+}
+
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-row dt {
+  flex: none;
+}
+
+.shortcut-row dd {
+  margin: 0;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.shortcut-row kbd {
+  padding: 1px var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  :root {
+    --settings-width: 100vw;
+  }
+}
+
 /* Tabs */
 
 .tab-strip {
@@ -692,7 +912,7 @@ body {
 }
 
 .tab:hover {
-  background: var(--surface-hover);
+  background: var(--surface-muted);
   color: var(--text-primary);
 }
 
@@ -1001,11 +1221,13 @@ body {
   text-rendering: auto;
 }
 
+/* --ld-paper and --ld-ink are set only when the page follows the theme
+   (reader.js updatePageColorStyle); a paper page is white with black ink. */
 #docBody .docx-wrapper > section.docx {
   margin: 0 0 var(--space-6);
-  background: #ffffff;
+  background: var(--ld-paper, #ffffff);
   box-shadow: var(--page-shadow);
-  color: #000000;
+  color: var(--ld-ink, #000000);
 }
 
 /* docx-preview hyphenates every document; Word only one whose settings turn
@@ -1132,6 +1354,24 @@ body {
   color: #0e0d0b;
 }
 
+/* A page that follows the theme marks matches and selections in the
+   theme's colours, LeanMark's find tokens. */
+:root[data-page-color="theme"] ::highlight(leandoc-find),
+:root[data-page-color="theme"] #docBody mark.ld-find {
+  background: var(--find);
+  color: var(--find-text);
+}
+
+:root[data-page-color="theme"] ::highlight(leandoc-find-current),
+:root[data-page-color="theme"] #docBody mark.ld-find[data-current] {
+  background: var(--find-current);
+  color: var(--find-text);
+}
+
+:root[data-page-color="theme"] #docBody section.docx ::selection {
+  background: var(--selection);
+}
+
 /* Reading view: one paper column that reflows to the window. */
 
 :root[data-view="reading"] #docBody .docx-wrapper {
@@ -1142,7 +1382,7 @@ body {
   margin: var(--space-8) auto var(--space-12);
   padding: var(--space-12) 3.5rem;
   border-radius: var(--radius-sm);
-  background: #ffffff;
+  background: var(--ld-paper, #ffffff);
   box-shadow: var(--page-shadow);
 }
 
@@ -1325,7 +1565,7 @@ body {
 
 @media (max-width: 1080px) {
   .search-field {
-    width: 160px;
+    min-width: 160px;
   }
 
   .outline {
@@ -1334,7 +1574,6 @@ body {
 }
 
 @media (max-width: 900px) {
-  .button-ghost,
   .segmented .segment {
     min-width: 0;
   }
@@ -1360,12 +1599,34 @@ body {
   }
 
   .search-field {
-    width: auto;
+    min-width: 132px;
     flex: 1 1 140px;
   }
 
   .outline {
     display: none;
+  }
+
+  /* As in LeanMark: the theme stays in the settings panel. */
+  .wordmark,
+  .file-copy span,
+  #themeButton {
+    display: none;
+  }
+
+  .file-copy strong {
+    max-width: 160px;
+  }
+}
+
+@media (max-width: 560px) {
+  .file-copy {
+    display: none;
+  }
+
+  .button {
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
   }
 }
 
@@ -1390,11 +1651,22 @@ body {
     box-shadow: none;
     text-decoration: underline;
   }
+
+  .theme-swatch {
+    border-color: ButtonText;
+  }
+
+  .settings-panel {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
 }
 
 @media print {
   .chrome,
   .outline,
+  .settings-panel,
   .status-toast {
     display: none !important;
   }

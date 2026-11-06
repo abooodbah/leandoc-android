@@ -19,8 +19,8 @@ object HostMessages {
         .put("tabs", false)
         .toString()
 
-    fun theme(theme: String, view: String): String =
-        JSONObject().put("type", "theme").put("theme", theme).put("view", view).toString()
+    fun theme(theme: String, view: String, pageColor: String = "paper"): String = JSONObject()
+        .put("type", "theme").put("theme", theme).put("view", view).put("pageColor", pageColor).toString()
 
     fun empty(): String = """{"type":"empty","recent":[]}"""
 

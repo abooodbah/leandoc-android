@@ -92,6 +92,7 @@ class MainActivity : Activity() {
     private var awaitingFirstRender = true
     private var theme = "system"
     private var readerView = "page"
+    private var pageColor = "paper"
 
     // While the page shows a sheet, back closes it instead of the app.
     private var sheetOpen = false
@@ -110,6 +111,7 @@ class MainActivity : Activity() {
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         theme = prefs.getString(KEY_THEME, "system")?.takeIf { it in Themes.NAMES } ?: "system"
         readerView = prefs.getString(KEY_VIEW, "page") ?: "page"
+        pageColor = if (prefs.getString(KEY_PAGE_COLOR, "paper") == "theme") "theme" else "paper"
 
         root = FrameLayout(this)
         setContentView(root)
@@ -409,7 +411,7 @@ class MainActivity : Activity() {
                 readerReady = true
                 phase("reader ready")
                 send(HostMessages.host(versionName()))
-                send(HostMessages.theme(theme, readerView))
+                send(HostMessages.theme(theme, readerView, pageColor))
                 sendCurrentView()
             }
             ReaderCommand.Open -> pickDocument()
@@ -418,12 +420,16 @@ class MainActivity : Activity() {
             is ReaderCommand.SetTheme -> {
                 theme = command.theme
                 prefs.edit().putString(KEY_THEME, theme).apply()
-                send(HostMessages.theme(theme, readerView))
+                send(HostMessages.theme(theme, readerView, pageColor))
                 applyBarColors()
             }
             is ReaderCommand.SetView -> {
                 readerView = command.view
                 prefs.edit().putString(KEY_VIEW, readerView).apply()
+            }
+            is ReaderCommand.SetPageColor -> {
+                pageColor = command.pageColor
+                prefs.edit().putString(KEY_PAGE_COLOR, pageColor).apply()
             }
             is ReaderCommand.Link -> followLink(command.href)
             is ReaderCommand.Rendered -> {
@@ -646,6 +652,7 @@ class MainActivity : Activity() {
         const val TIMING = "LeanDocTiming"
         const val KEY_THEME = "theme"
         const val KEY_VIEW = "view"
+        const val KEY_PAGE_COLOR = "pageColor"
         const val STATE_URI = "document"
         const val REQUEST_OPEN = 1
 

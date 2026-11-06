@@ -1585,6 +1585,181 @@
       settings.autoHyphenation !== false;
   }
 
+  // The page colour setting. Every colour the document names (text, borders,
+  // shading, highlights) is written as var(--ldc-N, <the colour>), so with no
+  // variable set the page draws exactly the colour it named; when the page
+  // follows a dark theme, the reader sets each variable to the colour mapped
+  // onto that theme (darkPageColor). Each colour gets one variable per role:
+  // "fill" for backgrounds, "line" for text, borders, and underlines.
+  var COLOR_PROPERTY = /^(color|background(-color)?|border(-(top|right|bottom|left))?(-color)?|outline(-color)?|text-decoration(-color)?|column-rule(-color)?)$/;
+  // Only colours CSS knows: darkYellow and none are dropped by the browser
+  // today, and a variable would change that.
+  var COLOR_LITERAL = /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:black|white|red|green|blue|yellow|cyan|magenta|lightGray|darkBlue|darkCyan|darkGray|darkGreen|darkMagenta|darkRed)\b/g;
+  var COLOR_NAMES = {
+    black: "#000000", white: "#ffffff", red: "#ff0000", green: "#008000", blue: "#0000ff",
+    yellow: "#ffff00", cyan: "#00ffff", magenta: "#ff00ff", lightgray: "#d3d3d3",
+    darkblue: "#00008b", darkcyan: "#008b8b", darkgray: "#a9a9a9", darkgreen: "#006400",
+    darkmagenta: "#8b008b", darkred: "#8b0000"
+  };
+  var PART_SKIP = { _package: true, _documentParser: true, _xmlDocument: true, rels: true, path: true };
+  var PAGE_COLOR_PREFIX = "--ldc-";
+
+  function colorPalette(doc) {
+    var palette = [];
+    var byKey = {};
+    var seen = new Set();
+    function route(value, role) {
+      return value.replace(COLOR_LITERAL, function (literal) {
+        var color = literal.toLowerCase();
+        var key = role + " " + color;
+        if (!(key in byKey)) {
+          byKey[key] = palette.length;
+          palette.push({ color: color, role: role });
+        }
+        return "var(" + PAGE_COLOR_PREFIX + byKey[key] + ", " + literal + ")";
+      });
+    }
+    function visit(node, isPart) {
+      if (!node || typeof node !== "object" || seen.has(node)) {
+        return;
+      }
+      seen.add(node);
+      Object.keys(node).forEach(function (key) {
+        if (isPart && PART_SKIP[key]) {
+          return;
+        }
+        var value = node[key];
+        if (typeof value === "string") {
+          if (COLOR_PROPERTY.test(key) && value.indexOf("var(" + PAGE_COLOR_PREFIX) < 0) {
+            node[key] = route(value, /^background/.test(key) ? "fill" : "line");
+          }
+        } else if (value && typeof value === "object") {
+          visit(value, false);
+        }
+      });
+    }
+    (doc && Array.isArray(doc.parts) ? doc.parts : []).forEach(function (part) {
+      visit(part, true);
+    });
+    return palette;
+  }
+
+  // Colour arithmetic in OKLab (Björn Ottosson's), where lightness is close
+  // to what the eye sees.
+  function parseColor(text) {
+    var value = String(text || "").trim().toLowerCase();
+    value = COLOR_NAMES[value] || value;
+    var match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(value);
+    if (!match) {
+      return null;
+    }
+    var hex = match[1].length === 3 ? match[1].replace(/./g, "$&$&") : match[1];
+    return [0, 2, 4].map(function (at) {
+      return parseInt(hex.slice(at, at + 2), 16);
+    });
+  }
+
+  function toLinear(channel) {
+    var c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
+  function fromLinear(value) {
+    var c = value <= 0.0031308 ? 12.92 * value : 1.055 * Math.pow(value, 1 / 2.4) - 0.055;
+    return c * 255;
+  }
+
+  function toLab(rgb) {
+    var r = toLinear(rgb[0]);
+    var g = toLinear(rgb[1]);
+    var b = toLinear(rgb[2]);
+    var l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    var m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    var s2 = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s2,
+      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s2,
+      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s2
+    ];
+  }
+
+  function labToLinear(lab) {
+    var l = Math.pow(lab[0] + 0.3963377774 * lab[1] + 0.2158037573 * lab[2], 3);
+    var m = Math.pow(lab[0] - 0.1055613458 * lab[1] - 0.0638541728 * lab[2], 3);
+    var s2 = Math.pow(lab[0] - 0.0894841775 * lab[1] - 1.2914855480 * lab[2], 3);
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s2,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s2,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s2
+    ];
+  }
+
+  // Back to sRGB, giving up colourfulness, never lightness, to stay in gamut.
+  function fromLab(lab) {
+    var current = lab.slice();
+    for (var attempt = 0; attempt < 40; attempt += 1) {
+      var linear = labToLinear(current);
+      if (linear.every(function (c) { return c >= -0.0005 && c <= 1.0005; }) || attempt === 39) {
+        return linear.map(function (c) {
+          return Math.round(Math.min(255, Math.max(0, fromLinear(Math.min(1, Math.max(0, c))))));
+        });
+      }
+      current[1] *= 0.9;
+      current[2] *= 0.9;
+    }
+    return [0, 0, 0];
+  }
+
+  function relativeLuminance(rgb) {
+    return 0.2126 * toLinear(rgb[0]) + 0.7152 * toLinear(rgb[1]) + 0.0722 * toLinear(rgb[2]);
+  }
+
+  function contrastRatio(a, b) {
+    var x = relativeLuminance(a);
+    var y = relativeLuminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+
+  // A document colour on a dark page: lightness turns around, so white is
+  // the page and black is the theme's text, and the colour keeps its hue.
+  // Text, borders, and underlines stay at 4.5:1 or more against the page;
+  // fills stay dark enough for the theme's text on them at 4.5:1 or more.
+  function darkPageColor(color, role, paper, ink) {
+    var rgb = parseColor(color);
+    var paperRgb = parseColor(paper);
+    var inkRgb = parseColor(ink);
+    if (!rgb || !paperRgb || !inkRgb) {
+      return color;
+    }
+    var lab = toLab(rgb);
+    var paperLab = toLab(paperRgb);
+    var inkLab = toLab(inkRgb);
+    var turn = Math.min(1, Math.max(0, 1 - lab[0]));
+    var neutral = Math.abs(lab[1]) < 1e-4 && Math.abs(lab[2]) < 1e-4;
+    var out;
+    if (neutral && turn < 1e-6) {
+      out = paperRgb;
+    } else if (neutral && turn > 1 - 1e-6) {
+      out = inkRgb;
+    } else {
+      var mapped = [0, 1, 2].map(function (index) {
+        return paperLab[index] + turn * (inkLab[index] - paperLab[index]) + (index ? lab[index] : 0);
+      });
+      out = fromLab(mapped);
+      for (var step = 0; step < 100; step += 1) {
+        var enough = role === "fill"
+          ? contrastRatio(inkRgb, out) >= 4.5
+          : contrastRatio(out, paperRgb) >= 4.5;
+        if (enough) {
+          break;
+        }
+        mapped[0] = Math.min(1, Math.max(0, mapped[0] + (role === "fill" ? -0.01 : 0.01)));
+        out = fromLab(mapped);
+      }
+    }
+    return "rgb(" + out.join(", ") + ")";
+  }
+
   function prepareModel(doc) {
     var stats = { bullets: 0, symbols: 0, paragraphs: 0, paired: false, bidiVisualTables: 0,
       noteReferences: 0, pageFields: 0, autoHyphenation: false, sectionBreakParagraphs: 0, fittedTables: 0,
@@ -1812,6 +1987,10 @@
         delete part._xmlDocument;
       }
     });
+    stats.palette = colorPalette(doc);
+    var scheme = doc.themePart && doc.themePart.theme && doc.themePart.theme.colorScheme;
+    stats.themeColors = scheme && scheme.colors && typeof scheme.colors === "object"
+      ? Object.assign({}, scheme.colors) : {};
     return stats;
   }
 
@@ -1861,6 +2040,9 @@
     wordSingleLine: wordSingleLine,
     TITLE_SECTION: TITLE_SECTION,
     markTitleSections: markTitleSections,
+    colorPalette: colorPalette,
+    darkPageColor: darkPageColor,
+    PAGE_COLOR_PREFIX: PAGE_COLOR_PREFIX,
     prepareModel: prepareModel
   });
 }));

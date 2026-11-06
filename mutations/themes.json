@@ -1,21 +1,5 @@
 [
   {
-    "name": "Leave Dim out of the theme button's steps",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/reader.js",
-    "old": "var THEMES = [\"system\", \"light\", \"dark\", \"dim\", \"dusk\"];",
-    "new": "var THEMES = [\"system\", \"light\", \"dark\", \"dusk\"];"
-  },
-  {
-    "name": "Name System without the theme it shows",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/reader.js",
-    "old": "      ? \"System (\" + (systemTheme.matches ? \"Dark\" : \"Light\") + \")\"",
-    "new": "      ? \"System\""
-  },
-  {
     "name": "Give Dusk Dark's canvas",
     "suite": "device",
     "tests": "ThemeTest",
@@ -30,14 +14,6 @@
     "file": "app/src/main/assets/reader/reader.css",
     "old": ":root[data-theme=\"dark\"] {\n  color-scheme: dark;\n  --canvas: var(--neutral-950);\n  --surface: var(--neutral-900);\n  --surface-muted: var(--neutral-800);\n  --surface-hover: #24221e;\n  --border: var(--neutral-800);",
     "new": ":root[data-theme=\"dark\"] {\n  color-scheme: dark;\n  --canvas: var(--neutral-950);\n  --surface: var(--neutral-900);\n  --surface-muted: var(--neutral-800);\n  --surface-hover: #24221e;\n  --border: #2f2c27;"
-  },
-  {
-    "name": "Drop Dim's dot colour",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android.css",
-    "old": ".theme-swatch[data-swatch=\"dim\"] { --swatch: #7f8a99; }\n",
-    "new": ""
   },
   {
     "name": "Mark the current entry in accent blue in every theme",
@@ -61,30 +37,6 @@
     "tests": "ThemeTest",
     "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
     "old": "                prefs.edit().putString(KEY_THEME, theme).apply()\n",
-    "new": ""
-  },
-  {
-    "name": "The sheet's view choice does nothing",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "        (input.value === \"reading\" ? viewReading : viewPage).click();\n",
-    "new": ""
-  },
-  {
-    "name": "The sheet's zoom in does nothing",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "    into.addEventListener(\"click\", function () {\n      zoomIn.click();\n    });",
-    "new": "    into.addEventListener(\"click\", function () {\n    });"
-  },
-  {
-    "name": "Disable nothing without a document",
-    "suite": "device",
-    "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android-host.js",
-    "old": "        input.disabled = !hasDocument;\n",
     "new": ""
   },
   {
@@ -118,11 +70,50 @@
     "new": "val NAMES = listOf(\"system\", \"light\", \"dark\", \"dusk\")"
   },
   {
-    "name": "Let Tab leave an open sheet",
+    "name": "Let Tab leave the outline sheet",
     "suite": "device",
     "tests": "ThemeTest",
     "file": "app/src/main/assets/reader/android-host.js",
     "old": "      event.preventDefault();\n      event.stopPropagation();\n      next.focus();\n",
     "new": ""
+  },
+  {
+    "name": "Forget the page colour between runs",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "                prefs.edit().putString(KEY_PAGE_COLOR, pageColor).apply()\n",
+    "new": ""
+  },
+  {
+    "name": "Show the shortcut list on Android",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": ".settings-panel > h3.settings-label,\n#shortcutList {\n  display: none;\n}\n",
+    "new": ""
+  },
+  {
+    "name": "Let the panel take the document's width on a phone",
+    "suite": "device",
+    "tests": "ThemeTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  :root[data-settings-open] .reader,\n  :root[data-settings-open] .state-pane {\n    margin-right: 0;\n  }\n",
+    "new": ""
+  },
+  {
+    "name": "Hide the theme dot on a phone, as the desktop does",
+    "suite": "device",
+    "tests": "PhoneLayoutTest",
+    "file": "app/src/main/assets/reader/android.css",
+    "old": "  .phone-actions #themeButton {\n    display: inline-flex;\n  }\n",
+    "new": ""
+  },
+  {
+    "name": "Refuse the page colour from the page",
+    "suite": "jvm",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/ReaderCommand.kt",
+    "old": "\"paper\", \"theme\" -> SetPageColor(color)",
+    "new": "\"paper\" -> SetPageColor(color)"
   }
 ]
