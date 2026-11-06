@@ -288,9 +288,13 @@ wait_renders() {
   done
 }
 
-declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=()
+declare -A ZOOM_MS=() THEME_MS=() FIND_MS=() FIND_MAX=() VIEW_MS=() RESIZE_MS=() NIGHT_MS=()
 for label in "${LABELS[@]}"; do
   install "$label"
+  # The scrolling above left the emulator in touch mode, where a starting
+  # window gives no view the keyboard focus, and the first build measured
+  # here got no key times in every run. A key press leaves touch mode.
+  adb shell input keyevent KEYCODE_SHIFT_LEFT || true
   adb shell pm clear "$PKG" >/dev/null || log "pm clear failed"
   open_document "$LARGE" "$LARGE_TYPE" >/dev/null
   fully_drawn 90 >/dev/null
@@ -300,32 +304,46 @@ for label in "${LABELS[@]}"; do
     log "$label actions not measured, another window has focus: $focus"
     continue
   fi
-  adb logcat -c
-  for keys in "KEYCODE_EQUALS" "KEYCODE_EQUALS" "KEYCODE_MINUS" "KEYCODE_MINUS"; do
-    key KEYCODE_CTRL_LEFT $keys
-    sleep 3
+  # In one run the first keys after the start reached the page but no time
+  # came back; each step is tried a second time when it reports nothing.
+  for attempt in 1 2; do
+    adb logcat -c
+    for keys in "KEYCODE_EQUALS" "KEYCODE_EQUALS" "KEYCODE_MINUS" "KEYCODE_MINUS"; do
+      key KEYCODE_CTRL_LEFT $keys
+      sleep 3
+    done
+    ZOOM_MS[$label]=$(timing_lines | action_ms zoom | median)
+    [ "${ZOOM_MS[$label]}" = NA ] || break
+    log "$label zoom: no times on attempt $attempt"
   done
-  ZOOM_MS[$label]=$(timing_lines | action_ms zoom | median)
   # Back to the automatic zoom, which follows a rotation.
   key KEYCODE_CTRL_LEFT KEYCODE_0
   sleep 3
-  adb logcat -c
-  for _ in 1 2 3; do
-    key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_T
-    sleep 3
+  for attempt in 1 2; do
+    adb logcat -c
+    for _ in 1 2 3; do
+      key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_T
+      sleep 3
+    done
+    THEME_MS[$label]=$(timing_lines | action_ms theme | median)
+    [ "${THEME_MS[$label]}" = NA ] || break
+    log "$label theme: no times on attempt $attempt"
   done
-  THEME_MS[$label]=$(timing_lines | action_ms theme | median)
-  key KEYCODE_CTRL_LEFT KEYCODE_F
-  sleep 2
-  adb logcat -c
-  for letter in s e c t i o n; do
-    adb shell input text "$letter" || log "input text failed"
+  for attempt in 1 2; do
+    key KEYCODE_CTRL_LEFT KEYCODE_F
     sleep 2
+    adb logcat -c
+    for letter in s e c t i o n; do
+      adb shell input text "$letter" || log "input text failed"
+      sleep 2
+    done
+    FIND_MS[$label]=$(timing_lines | action_ms find | median)
+    FIND_MAX[$label]=$(timing_lines | action_ms find | sort -n | tail -n 1)
+    adb shell input keyevent KEYCODE_ESCAPE || true
+    sleep 2
+    [ "${FIND_MS[$label]}" = NA ] || break
+    log "$label find: no times on attempt $attempt"
   done
-  FIND_MS[$label]=$(timing_lines | action_ms find | median)
-  FIND_MAX[$label]=$(timing_lines | action_ms find | sort -n | tail -n 1)
-  adb shell input keyevent KEYCODE_ESCAPE || true
-  sleep 2
   adb logcat -c
   key KEYCODE_CTRL_LEFT KEYCODE_SHIFT_LEFT KEYCODE_V
   wait_renders 1
@@ -336,12 +354,29 @@ for label in "${LABELS[@]}"; do
   sleep 3
   adb shell settings put system accelerometer_rotation 0
   adb logcat -c
-  adb shell settings put system user_rotation 1
-  sleep 6
-  adb shell settings put system user_rotation 0
-  sleep 6
+  for _ in 1 2 3; do
+    adb shell settings put system user_rotation 1
+    sleep 6
+    adb shell settings put system user_rotation 0
+    sleep 6
+  done
   RESIZE_MS[$label]=$(timing_lines | action_ms resize | median)
-  log "$label actions: zoom ${ZOOM_MS[$label]:-NA} ms, theme ${THEME_MS[$label]:-NA} ms, find ${FIND_MS[$label]:-NA} ms (max ${FIND_MAX[$label]:-NA}), view ${VIEW_MS[$label]:-NA} ms, rotation ${RESIZE_MS[$label]:-NA} ms"
+  # The system's dark mode switched while reading, as at sunset: Android
+  # creates the activity again, which reads, cleans and draws the file
+  # again. Timed from the new activity's creation to the drawn document, as
+  # the app logs it.
+  adb logcat -c
+  adb shell cmd uimode night yes >/dev/null 2>&1 || log "cmd uimode failed"
+  NIGHT_MS[$label]=NA
+  for _ in $(seq 1 900); do
+    night=$(timing_lines | sed -n 's/^phase drawn \([0-9][0-9]*\) ms$/\1/p' | head -n 1)
+    if [ -n "$night" ]; then NIGHT_MS[$label]=$night; break; fi
+    sleep 0.1
+  done
+  sleep 3
+  adb shell cmd uimode night no >/dev/null 2>&1 || true
+  sleep 5
+  log "$label actions: zoom ${ZOOM_MS[$label]:-NA} ms, theme ${THEME_MS[$label]:-NA} ms, find ${FIND_MS[$label]:-NA} ms (max ${FIND_MAX[$label]:-NA}), view ${VIEW_MS[$label]:-NA} ms, rotation ${RESIZE_MS[$label]:-NA} ms, night mode ${NIGHT_MS[$label]:-NA} ms"
 done
 
 row() {
@@ -394,13 +429,13 @@ row() {
     row "**Total PSS, app and renderer** (KB, median of 3)" "${total[@]}"
   fi
   big_app=(); big_java=(); big_total=(); big_drawn=()
-  zoom=(); theme=(); find=(); find_max=(); view=(); resize=()
+  zoom=(); theme=(); find=(); find_max=(); view=(); resize=(); night=()
   for label in "${LABELS[@]}"; do
     big_app+=("${BIG_APP[$label]:-NA}"); big_java+=("${BIG_JAVA[$label]:-NA}")
     big_total+=("${BIG_TOTAL[$label]:-NA}"); big_drawn+=("${BIG_DRAWN[$label]:-NA}")
     zoom+=("${ZOOM_MS[$label]:-NA}"); theme+=("${THEME_MS[$label]:-NA}")
     find+=("${FIND_MS[$label]:-NA}"); find_max+=("${FIND_MAX[$label]:-NA}")
-    view+=("${VIEW_MS[$label]:-NA}"); resize+=("${RESIZE_MS[$label]:-NA}")
+    view+=("${VIEW_MS[$label]:-NA}"); resize+=("${RESIZE_MS[$label]:-NA}"); night+=("${NIGHT_MS[$label]:-NA}")
   done
   row "$BIG_NAME drawn after a cold start (ms)" "${big_drawn[@]}"
   row "App process PSS after $BIG_NAME (KB)" "${big_app[@]}"
@@ -413,7 +448,8 @@ row() {
   row "Find, one typed letter, $LARGE_NAME (ms to the frame, median of 7)" "${find[@]}"
   row "Find, slowest letter of the 7 (ms)" "${find_max[@]}"
   row "View switch on $LARGE_NAME (render ms, median of 2)" "${view[@]}"
-  row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 2)" "${resize[@]}"
+  row "Rotation on $LARGE_NAME (ms to the frame with the new zoom, median of 6)" "${resize[@]}"
+  row "System dark mode switched on $LARGE_NAME (ms from the new activity to the document drawn again)" "${night[@]}"
   row "Frames over 10 swipes (software GPU, not a budget check)" "${frames[@]}"
   row "Janky frames over 10 swipes (software GPU, not a budget check)" "${jank[@]}"
   row "90th percentile frame time (software GPU, not a budget check)" "${p90[@]}"
@@ -424,7 +460,7 @@ row() {
     echo
     printf '| Step |'; for label in "${LABELS[@]}"; do printf ' %s |' "$label"; done; printf '\n'
     printf '| --- |'; for _ in "${LABELS[@]}"; do printf ' ---: |'; done; printf '\n'
-    for name in "webview_created" "page_loaded" "reader_ready" "document_sent" "drawn"; do
+    for name in "webview_created" "page_loaded" "reader_ready" "document_sent" "rendered" "drawn"; do
       [ -n "${PHASE_NAMES[$name]:-}" ] || continue
       printf '| %s |' "${name//_/ }"
       for label in "${LABELS[@]}"; do printf ' %s |' "$(median <<<"${PHASES[$label|$name]:-}")"; done

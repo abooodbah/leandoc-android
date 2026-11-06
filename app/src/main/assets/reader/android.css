@@ -2,9 +2,123 @@
    after it, so equal selectors here win. Phones are pages up to 760 px
    wide, where the desktop page hides the outline pane. */
 
-/* The phone toolbar: two rows. The theme, other-app and Open buttons move up
-   beside the file name (android-host.js); the find field, the view switch
-   and the zoom share the second row. */
+/* LeanMark's five themes. Light and Dark are the desktop page's own; Dim
+   and Dusk take LeanMark 0.6.0's values (assets/reader.css) for every token
+   the two apps share. The tokens only LeanDoc has take the LeanMark token
+   that plays their part, as LeanDoc desktop's Dim and Dusk do (leandoc pull
+   request 27): hover is the muted surface, the strong border is the quote
+   rule, the document canvas is the code canvas, and the notice is the muted
+   surface with the border and Dark's amber. Each block sets every token the
+   dark blocks set, so it wins over the system-dark block. */
+/* Dark's borders are LeanMark's --neutral-800; the desktop page had #2f2c27. */
+:root[data-theme="dark"] {
+  --border: #2b2924;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --border: #2b2924;
+  }
+}
+
+:root[data-theme="dim"] {
+  color-scheme: dark;
+  --canvas: #1e2023;
+  --surface: #25282c;
+  --surface-muted: #2d3035;
+  --surface-hover: #2d3035;
+  --border: #393d43;
+  --border-strong: #4a4f56;
+  --text-primary: #c8ccd2;
+  --text-secondary: #9ea4ac;
+  --text-disabled: #6c727a;
+  --ring: #6c9be0;
+  --link: #86aee6;
+  --link-hover: #a6c4ee;
+  --selection: #34486a;
+  --doc-canvas: #282b30;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
+  --notice-surface: #2d3035;
+  --notice-border: #393d43;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
+  --wordmark-surface: #c8ccd2;
+  --wordmark-ink: #1e2023;
+}
+
+:root[data-theme="dusk"] {
+  color-scheme: dark;
+  --canvas: #221e19;
+  --surface: #29241e;
+  --surface-muted: #322c25;
+  --surface-hover: #322c25;
+  --border: #3f3830;
+  --border-strong: #574c3f;
+  --text-primary: #d4c8b4;
+  --text-secondary: #a99c87;
+  --text-disabled: #776c5c;
+  --ring: #c99a62;
+  --link: #e0a86e;
+  --link-hover: #ebc08f;
+  --selection: #4d3f2c;
+  --doc-canvas: #2c2721;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
+  --notice-surface: #322c25;
+  --notice-border: #3f3830;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
+  --wordmark-surface: #d4c8b4;
+  --wordmark-ink: #221e19;
+}
+
+/* The theme button's dot, as in LeanMark: one fixed colour per theme, with
+   the same grey ring in every theme. System is half Light and half Dark. */
+.theme-button {
+  gap: var(--space-2);
+}
+
+.theme-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #8c8c8c;
+  border-radius: 50%;
+  background: var(--swatch, #ffffff);
+}
+
+.theme-swatch[data-swatch="light"] { --swatch: #ffffff; }
+.theme-swatch[data-swatch="dark"] { --swatch: #000000; }
+.theme-swatch[data-swatch="dim"] { --swatch: #7f8a99; }
+.theme-swatch[data-swatch="dusk"] { --swatch: #c98f4f; }
+.theme-swatch[data-swatch="system"] {
+  background: linear-gradient(90deg, #ffffff 50%, #000000 50%);
+}
+
+/* The current section in the outline, as LeanMark marks it: the muted
+   surface, a bar in the link colour and the primary text colour. In every
+   theme these are the theme's own tokens. The entry keeps its weight: a
+   bolder current entry made the browser lay out the page again each time
+   the current section changed (LeanMark measured it). The second and third
+   selectors are as specific as the desktop's dark rules, which come
+   earlier. */
+.outline-list a[aria-current="location"],
+:root[data-theme] .outline-list a[aria-current="location"],
+:root:not([data-theme="light"]) .outline-list a[aria-current="location"] {
+  background: var(--surface-muted);
+  box-shadow: inset 2px 0 0 var(--link);
+  color: var(--text-primary);
+  font-weight: 400;
+}
+
+:root .outline-list a[data-level="1"][aria-current="location"] {
+  font-weight: 500;
+}
+
+/* The phone toolbar: two rows. The theme, settings, other-app and Open
+   buttons move up beside the file name (android-host.js); the find field,
+   the outline button and the zoom share the second row. The view switch is
+   in the settings sheet. */
 @media (max-width: 760px) {
   .topbar {
     flex-wrap: wrap;
@@ -56,11 +170,10 @@
     padding-right: 0;
   }
 
-  .segmented .segment {
-    min-width: 0;
-    padding-right: 8px;
-    padding-left: 8px;
+  .toolbar > .segmented {
+    display: none;
   }
+
 
   .zoom-step {
     width: 28px;
@@ -70,9 +183,28 @@
     min-width: 44px;
   }
 
-  /* "Open in another app" as an icon. The label stays the button's text, so
-     it is still the name TalkBack reads. */
-  .phone-actions #editorButton {
+}
+
+/* Up to 1080 px (phones, and tablets in portrait or landscape) the theme
+   button shows its dot only and "Open in another app" an icon, so the
+   controls and the file name fit. Each button keeps its name: TalkBack reads
+   "Theme: Dusk" and the label. */
+@media (max-width: 1080px) {
+  .theme-button {
+    width: 40px;
+    padding: 0;
+  }
+
+  #themeLabel {
+    display: none;
+  }
+
+  .theme-button .theme-swatch {
+    width: 14px;
+    height: 14px;
+  }
+
+  #editorButton {
     position: relative;
     width: 40px;
     padding: 0;
@@ -81,7 +213,7 @@
     font-size: 0;
   }
 
-  .phone-actions #editorButton::before {
+  #editorButton::before {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -100,12 +232,21 @@
   --icon-open-elsewhere: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3'/%3E%3C/svg%3E");
 }
 
-/* The outline button opens the outline as a sheet. It shows only on phones,
-   and only when the document has headings. */
+/* Icon buttons. The settings button shows at every width; the outline
+   button only on phones, and only when the document has headings. */
 .android-icon-button {
-  display: none;
+  display: inline-flex;
   width: 40px;
   padding: 0;
+}
+
+#outlineButton {
+  display: none;
+}
+
+.button[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--surface-muted);
 }
 
 .android-icon-button svg {
@@ -119,7 +260,7 @@
 }
 
 @media (max-width: 760px) {
-  :root[data-has-document] .android-icon-button:not([hidden]) {
+  :root[data-has-document] #outlineButton:not([hidden]) {
     display: inline-flex;
   }
 }
@@ -128,7 +269,10 @@
 .android-scrim {
   position: fixed;
   z-index: 40;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgb(0 0 0 / 32%);
 }
 
@@ -154,6 +298,11 @@
   box-sizing: border-box;
 }
 
+.android-sheet :where(button, input, output) {
+  font: inherit;
+  color: inherit;
+}
+
 .android-sheet-head {
   display: flex;
   min-height: 52px;
@@ -170,6 +319,14 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+/* The settings sheet's title, as LeanMark's panel has it. */
+#settingsSheetTitle {
+  color: var(--text-primary);
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .android-sheet-close {
@@ -225,6 +382,108 @@
   font-size: 15px;
 }
 
+/* The settings sheet, laid out like LeanMark's settings panel. Above 760 px
+   it stands at the right edge below the toolbar, as LeanMark's does. */
+.android-sheet-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 20px 24px;
+  overscroll-behavior: contain;
+}
+
+.settings-group {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  border: 0;
+}
+
+.settings-group legend,
+.settings-label {
+  display: block;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-choice {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.settings-choice input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--link);
+}
+
+.settings-choice:has(input:disabled) {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.settings-zoom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-zoom .settings-label {
+  width: 100%;
+}
+
+.settings-zoom .button {
+  min-width: 44px;
+  height: 44px;
+  border-color: var(--border);
+}
+
+.settings-zoom .button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+}
+
+.settings-zoom-value {
+  min-width: 52px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+@media (min-width: 761px) {
+  #settingsSheet {
+    top: var(--android-chrome-height, 57px);
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: 300px;
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #settingsSheet + .android-scrim,
+  :root[data-sheet="settings"] .android-scrim {
+    background: transparent;
+  }
+}
+
 @media (forced-colors: active) {
   .android-sheet {
     border: 1px solid CanvasText;
@@ -232,7 +491,7 @@
     color: CanvasText;
   }
 
-  .phone-actions #editorButton::before {
+  #editorButton::before {
     background: ButtonText;
   }
 }

@@ -55,9 +55,9 @@ class PhoneLayoutTest {
     }
 
     @Test
-    fun theControlsStayOnScreenOnASmallPhone() = open("features/styles.docx") { scenario ->
+    fun theControlsTakeTwoRowsOnASmallPhone() = open("features/styles.docx") { scenario ->
         narrow(scenario, 320)
-        assertEquals("", Reader.js(scenario, controlProblems(maxRows = 3)))
+        assertEquals("", Reader.js(scenario, controlProblems(maxRows = 2)))
     }
 
     @Test
@@ -110,8 +110,9 @@ class PhoneLayoutTest {
         /** An empty string when every control is on screen and they take at most [maxRows] rows. */
         fun controlProblems(maxRows: Int) = """(function () {
             var width = document.documentElement.clientWidth;
-            var ids = ['fileName', 'outlineButton', 'findInput', 'viewPage', 'viewReading', 'zoomOut',
-              'zoomValue', 'zoomIn', 'themeButton', 'editorButton', 'openButton'];
+            // The view switch is in the settings sheet on a phone.
+            var ids = ['fileName', 'outlineButton', 'findInput', 'zoomOut', 'zoomValue', 'zoomIn',
+              'themeButton', 'settingsButton', 'editorButton', 'openButton'];
             var problems = [];
             var rows = [];
             ids.forEach(function (id) {
@@ -132,6 +133,13 @@ class PhoneLayoutTest {
               if (!rows.some(function (row) { return Math.abs(row - middle) < 12; })) rows.push(middle);
             });
             if (rows.length > $maxRows) problems.push('the controls take ' + rows.length + ' rows');
+            // The theme button shows its dot only; its name says the theme.
+            var theme = document.getElementById('themeButton').getBoundingClientRect();
+            if (theme.width > 48) problems.push('the theme button is ' + Math.round(theme.width) + ' px wide');
+            if (document.getElementById('themeLabel').getClientRects().length > 0) problems.push('the theme button shows its label');
+            ['viewPage', 'viewReading'].forEach(function (id) {
+              if (document.getElementById(id).getClientRects().length > 0) problems.push(id + ' is in the toolbar');
+            });
             if (document.documentElement.scrollWidth > width + 0.5) problems.push('the page scrolls sideways');
             return problems.join('; ');
           })()"""

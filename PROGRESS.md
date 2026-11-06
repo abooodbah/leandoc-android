@@ -34,7 +34,7 @@ Pull requests, in order:
 | 1 | #17 Leave the Kotlin metadata files out of the APK | merged |
 | 1 | #18 Let go of the package once the page has it | merged |
 | 2 | #19 The outline as a sheet on phones; the highlight after a long jump | merged |
-| 3 | Five themes and the theme dot; settings button and sheet | planned |
+| 3 | #20 Five themes and the theme dot; settings button and sheet | merged |
 | 4 | Port LeanDoc desktop 0.2.0's reader | waits for the desktop merge |
 | 5 | Release 0.2.0 | last |
 
@@ -113,6 +113,17 @@ Desktop features from 0.1.4 that the app lacks, and why:
   the current entry in view. After a long jump the highlight is checked
   again once scrolling stops (it stayed several sections off). On a phone
   "Open in another app" is an icon. The phone layout moved to `android.css`.
+- #20: LeanMark's five themes (System, Light, Dark, Dim, Dusk) with
+  LeanMark 0.6.0's colours for every shared token; the LeanDoc-only tokens
+  as LeanDoc desktop's Dim and Dusk choose them (leandoc #27). The theme
+  button shows LeanMark's dot and its name says the theme ("Theme: System
+  (Dark)"). A settings button opens a sheet with the theme, view and zoom
+  (on a phone from the bottom, above 760 px at the right edge). The
+  current section is marked as LeanMark marks it. The system bars take the
+  theme's toolbar colour. Tab stays inside an open sheet. On a phone the
+  view switch is in the sheet and the controls take two rows down to
+  320 dp. The reader's theme functions reach the desktop's reader.js
+  through `scripts/android-reader.patch` until the desktop has them.
 
 - Gradle project: Kotlin, classic Views, no AndroidX or other libraries in
   the app. compileSdk and targetSdk 36, minSdk 26.
