@@ -177,6 +177,23 @@ Desktop features from 0.1.4 that the app lacks, and why:
 - Play Console setup and the closed test (see `store/closed-test.md`);
   these need the maintainer's account.
 
+### Start time against 0.1.2
+
+One emulator run (run 42218047019, draft #25, closed), builds taking turns,
+15 cold starts of `styles.docx` each, release builds. The empty app's first
+frame: 448 ms (median of 15).
+
+| Build | First frame (median) | Drawn (median) | Drawn minus the empty app | Drawn, lowest to highest |
+| --- | ---: | ---: | ---: | --- |
+| v0.1.2 | 505 ms | 1,406 ms | 958 ms | 834 to 1,944 ms |
+| main 7a6ba41 | 508 ms | 1,368 ms | 920 ms | 1,184 to 1,784 ms, and one start at 2,283 |
+| main again (same APK) | 517 ms | 1,364 ms | 916 ms | 777 to 1,508 ms |
+
+Main is 4% faster than 0.1.2 to the drawn document, as close as main is to
+itself. In earlier runs the starts fell into two groups about a second
+apart; here 44 of 45 were in the fast group. The 1,674 against 1,512 ms in
+the last port's budgets were main before and after that port, not 0.1.2.
+
 ## Known gaps
 
 - Images and documents linked from outside the file are not shown, by
