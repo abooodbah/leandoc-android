@@ -7,11 +7,13 @@ Open a file from your file manager, from an email attachment or from your browse
 What it does:
 - Page view, or a reading view that fits the text to the screen
 - Find in the document
-- An outline of the headings
+- An outline of the headings, with the section you are reading marked
 - Zoom
 - Copy the document as plain text
 - Notes on anything in the file that cannot be shown exactly
-- Light and dark themes, or follow the system setting
+- Five themes: System, Light, Dark, Dim and Dusk
+- The page white like paper, or in the theme's colours
+- A settings sheet for the theme, the view, the page colour and the zoom
 - Keeps your place when you rotate the phone
 - Hands the file to another app when you want to edit it
 

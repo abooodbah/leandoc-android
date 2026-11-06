@@ -23,8 +23,8 @@ Why "no" is accurate:
 - The file a user opens is read in memory to show it and is not stored or
   sent anywhere. While Android keeps the screen's saved state, that state
   holds the open file's content:// address, so the file can be shown again
-  after a restart of the app process. The app saves only the chosen theme
-  and the chosen view (page or reading), on the device, and turns off
+  after a restart of the app process. The app saves only the chosen theme,
+  the chosen view (page or reading) and the page colour, on the device, and turns off
   Android backup (`android:allowBackup="false"`).
 - Macros in .docm and .dotm files are never run, and images or templates a
   document links to on the internet are never fetched.
