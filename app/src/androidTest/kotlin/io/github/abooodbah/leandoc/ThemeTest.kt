@@ -128,10 +128,11 @@ class ThemeTest {
         // The sheet was opened from a script, so the WebView itself does not
         // have Android's focus yet; the first Tab would only give it that.
         scenario.onActivity { it.webViewForTest!!.requestFocus() }
-        Reader.js(scenario, "document.querySelector('#outlineSheet .android-sheet-close').focus()")
+        // From the last entry, where Tab would leave the sheet for the page.
+        Reader.js(scenario, "(function () { var links = document.querySelectorAll('#outlineSheet #outlineList a'); links[links.length - 1].focus(); })()")
         Reader.waitFor(scenario, "!!document.activeElement.closest('#outlineSheet')")
         val outside = mutableListOf<String>()
-        repeat(6) { step ->
+        repeat(3) { step ->
             Reader.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
             val where = Reader.js(
                 scenario,
