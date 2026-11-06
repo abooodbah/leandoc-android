@@ -1072,7 +1072,9 @@ body {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-2) 0 var(--space-4);
+  /* The label lines up with the entries' text: the list's 8 px and each
+     entry's 12 px, as LeanMark lines its label up with its entries. */
+  padding: 0 var(--space-2) 0 calc(var(--space-2) + var(--space-3));
 }
 
 .outline-label {
@@ -1092,9 +1094,11 @@ body {
   list-style: none;
 }
 
+/* Each entry leaves 12 px on the left for the current-section bar, as in
+   LeanMark. */
 .outline-list a {
   display: block;
-  padding: 5px var(--space-2);
+  padding: 5px var(--space-2) 5px var(--space-3);
   overflow: hidden;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
@@ -1110,31 +1114,13 @@ body {
   color: var(--text-primary);
 }
 
+/* The section being read, as in LeanMark 0.6.0: theme tokens only, so every
+   theme has it, and paint only: a heavier weight would lay the outline out
+   again each time the current section changes. The level-one weight stays. */
 .outline-list a[aria-current="location"] {
-  background: var(--accent-50);
-  box-shadow: inset 2px 0 0 var(--accent-500);
-  color: var(--accent-600);
-  font-weight: 500;
-}
-
-:root[data-theme="dark"] .outline-list a[aria-current="location"] {
-  background: #1b2540;
-  color: #bfd3ff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .outline-list a[aria-current="location"] {
-    background: #1b2540;
-    color: #bfd3ff;
-  }
-}
-
-/* After the system-dark rule above, which would otherwise win on a dark system. */
-:root[data-theme="dim"] .outline-list a[aria-current="location"],
-:root[data-theme="dusk"] .outline-list a[aria-current="location"] {
   background: var(--surface-muted);
   box-shadow: inset 2px 0 0 var(--link);
-  color: var(--link-hover);
+  color: var(--text-primary);
 }
 
 .outline-list a[data-level="1"] {
@@ -1142,14 +1128,16 @@ body {
   font-weight: 500;
 }
 
-.outline-list a[data-level="2"] { padding-left: calc(var(--space-2) + 12px); }
-.outline-list a[data-level="3"] { padding-left: calc(var(--space-2) + 24px); }
+/* LeanMark indents its second level by 16 px; each deeper level here adds
+   16 px more, up to the fourth. */
+.outline-list a[data-level="2"] { padding-left: calc(var(--space-3) + var(--space-4)); }
+.outline-list a[data-level="3"] { padding-left: calc(var(--space-3) + 2 * var(--space-4)); }
 .outline-list a[data-level="4"],
 .outline-list a[data-level="5"],
 .outline-list a[data-level="6"],
 .outline-list a[data-level="7"],
 .outline-list a[data-level="8"],
-.outline-list a[data-level="9"] { padding-left: calc(var(--space-2) + 36px); }
+.outline-list a[data-level="9"] { padding-left: calc(var(--space-3) + 3 * var(--space-4)); }
 
 .outline[data-collapsed] {
   width: 44px;
