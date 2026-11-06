@@ -18,6 +18,9 @@ class ReaderProtocolTest {
         for (theme in listOf("system", "light", "dark", "dim", "dusk")) {
             assertEquals(ReaderCommand.SetTheme(theme), ReaderCommand.parse("""{"type":"setTheme","theme":"$theme"}"""))
         }
+        assertEquals(ReaderCommand.SetPageColor("theme"), ReaderCommand.parse("""{"type":"setPageColor","pageColor":"theme"}"""))
+        assertEquals(ReaderCommand.SetPageColor("paper"), ReaderCommand.parse("""{"type":"setPageColor","pageColor":"paper"}"""))
+        assertNull(ReaderCommand.parse("""{"type":"setPageColor","pageColor":"sepia"}"""))
         assertEquals(ReaderCommand.SetView("reading"), ReaderCommand.parse("""{"type":"setView","view":"reading"}"""))
         assertEquals(ReaderCommand.Link("https://a.example/"), ReaderCommand.parse("""{"type":"link","href":"https://a.example/"}"""))
         assertEquals(ReaderCommand.Rendered(4, 12, 30), ReaderCommand.parse("""{"type":"rendered","tab":1,"generation":4,"pages":12,"ms":30}"""))
@@ -81,6 +84,7 @@ class ReaderProtocolTest {
         val theme = JSONObject(HostMessages.theme("light", "reading"))
         assertEquals("light", theme.getString("theme"))
         assertEquals("reading", theme.getString("view"))
+        assertEquals("theme", JSONObject(HostMessages.theme("dusk", "page", "theme")).getString("pageColor"))
 
         val report = """{"ok":true,"errorCode":"","kind":"docx","sourceBytes":10,"features":[],"outline":[]}"""
         val document = JSONObject(

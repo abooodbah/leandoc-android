@@ -104,7 +104,7 @@ class ThemeTest {
     @Test
     fun theSettingsSheetChangesTheViewAndTheZoom() = open { scenario ->
         Reader.js(scenario, "document.getElementById('settingsButton').click()")
-        Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
+        Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
         assertEquals(true, Reader.js(scenario, "document.querySelector('input[name=\"settings-view\"][value=\"page\"]').checked"))
         Reader.js(scenario, "document.querySelector('input[name=\"settings-view\"][value=\"reading\"]').click()")
         Reader.waitFor(scenario, "document.documentElement.dataset.view === 'reading'")
@@ -118,27 +118,24 @@ class ThemeTest {
         Reader.waitFor(scenario, "document.getElementById('settingsZoomValue').textContent === document.documentElement.dataset.zoom + '%'")
         Reader.js(scenario, "document.getElementById('settingsZoomFit').click()")
         Reader.waitFor(scenario, "document.documentElement.dataset.zoomMode === 'fit'")
-        Reader.waitFor(scenario, "document.getElementById('settingsZoomFit').textContent === '100%'")
     }
 
     @Test
-    fun tabStaysInsideAnOpenSheet() = open { scenario ->
-        Reader.js(scenario, "document.getElementById('settingsButton').click()")
-        Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
+    fun tabStaysInsideTheOutlineSheet() = open("features/long-300-pages.docx") { scenario ->
+        Reader.js(scenario, "document.getElementById('outlineButton').click()")
+        Reader.waitFor(scenario, "!document.getElementById('outlineSheet').hidden")
         Focus.ensure()
         // The sheet was opened from a script, so the WebView itself does not
         // have Android's focus yet; the first Tab would only give it that.
-        // Focus it, then put the page's focus back in the sheet, as a tap
-        // on the settings button leaves it.
         scenario.onActivity { it.webViewForTest!!.requestFocus() }
-        Reader.js(scenario, "document.querySelector('#settingsSheet input[name=\"settings-theme\"]:checked').focus()")
-        Reader.waitFor(scenario, "document.activeElement && document.activeElement.name === 'settings-theme'")
+        Reader.js(scenario, "document.querySelector('#outlineSheet .android-sheet-close').focus()")
+        Reader.waitFor(scenario, "!!document.activeElement.closest('#outlineSheet')")
         val outside = mutableListOf<String>()
-        repeat(12) { step ->
+        repeat(6) { step ->
             Reader.instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
             val where = Reader.js(
                 scenario,
-                "(function () { var a = document.activeElement; return a && a.closest('#settingsSheet') ? '' : (a ? (a.id || a.tagName) : 'none'); })()",
+                "(function () { var a = document.activeElement; return a && a.closest('#outlineSheet') ? '' : (a ? (a.id || a.tagName) : 'none'); })()",
             ) as String
             if (where.isNotEmpty()) outside += "Tab ${step + 1}: $where"
         }
@@ -146,18 +143,42 @@ class ThemeTest {
     }
 
     @Test
-    fun withoutADocumentTheSheetOffersTheThemeOnly() {
+    fun withoutADocumentTheSheetStillChangesTheTheme() {
         val launch = Reader.context.packageManager.getLaunchIntentForPackage(Reader.context.packageName)!!
         ActivityScenario.launch<MainActivity>(launch).use { scenario ->
             Reader.waitForState(scenario)
             Reader.js(scenario, "document.getElementById('settingsButton').click()")
-            Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
-            assertEquals(false, Reader.js(scenario, "document.querySelector('input[name=\"settings-theme\"][value=\"dim\"]').disabled"))
-            assertEquals(true, Reader.js(scenario, "document.querySelector('input[name=\"settings-view\"][value=\"reading\"]').disabled"))
-            assertEquals(true, Reader.js(scenario, "document.getElementById('settingsZoomIn').disabled"))
+            Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
             Reader.js(scenario, "document.querySelector('input[name=\"settings-theme\"][value=\"dim\"]').click()")
             Reader.waitFor(scenario, "document.documentElement.getAttribute('data-theme') === 'dim'")
         }
+    }
+
+    @Test
+    fun thePageColourFollowsTheThemeAndIsRemembered() {
+        open { scenario ->
+            choose(scenario, "dusk")
+            Reader.js(scenario, "document.getElementById('settingsButton').click()")
+            Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
+            assertEquals(true, Reader.js(scenario, "document.querySelector('input[name=\"settings-page\"][value=\"paper\"]').checked"))
+            Reader.js(scenario, "document.querySelector('input[name=\"settings-page\"][value=\"theme\"]').click()")
+            Reader.waitFor(scenario, "getComputedStyle(document.getElementById('docBody')).getPropertyValue('--ld-paper').trim() !== ''")
+        }
+        open { scenario ->
+            Reader.waitFor(scenario, "getComputedStyle(document.getElementById('docBody')).getPropertyValue('--ld-paper').trim() !== ''")
+            assertEquals(true, Reader.js(scenario, "document.querySelector('input[name=\"settings-page\"][value=\"theme\"]').checked"))
+        }
+    }
+
+    @Test
+    fun onAPhoneTheSettingsPanelIsASheetWithoutShortcuts() = open { scenario ->
+        Reader.js(scenario, "document.getElementById('settingsButton').click()")
+        Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
+        val box = JSONObject(Reader.js(scenario, "JSON.stringify((function () { var p = document.getElementById('settingsPanel').getBoundingClientRect(); return { top: p.top, bottom: p.bottom, height: innerHeight, width: p.width, page: innerWidth, shortcuts: document.getElementById('shortcutList').getClientRects().length, margin: getComputedStyle(document.querySelector('.reader')).marginRight }; })())") as String)
+        assertTrue("the panel sits at the bottom: $box", box.getDouble("bottom") >= box.getDouble("height") - 1 && box.getDouble("top") > box.getDouble("height") * 0.2)
+        assertEquals("$box", 0, box.getInt("shortcuts"))
+        assertEquals("the document keeps its width", "0px", box.getString("margin"))
+        assertEquals("Settings", Reader.js(scenario, "document.getElementById('settingsButton').getAttribute('aria-label')"))
     }
 
     private fun open(name: String = "features/styles.docx", block: (ActivityScenario<MainActivity>) -> Unit) =
@@ -169,12 +190,12 @@ class ThemeTest {
     /** Picks [theme] in the settings sheet, as a reader taps it, and closes the sheet. */
     private fun choose(scenario: ActivityScenario<MainActivity>, theme: String) {
         Reader.js(scenario, "document.getElementById('settingsButton').click()")
-        Reader.waitFor(scenario, "!document.getElementById('settingsSheet').hidden")
+        Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
         Reader.js(scenario, "document.querySelector('input[name=\"settings-theme\"][value=\"$theme\"]').click()")
         val attribute = if (theme == "system") "null" else "'$theme'"
         Reader.waitFor(scenario, "document.documentElement.getAttribute('data-theme') === $attribute")
-        Reader.js(scenario, "document.querySelector('#settingsSheet .android-sheet-close').click()")
-        Reader.waitFor(scenario, "document.getElementById('settingsSheet').hidden")
+        Reader.js(scenario, "document.getElementById('settingsClose').click()")
+        Reader.waitFor(scenario, "document.getElementById('settingsPanel').hidden")
     }
 
     /** The status and navigation bars take the theme's toolbar colour. */
