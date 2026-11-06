@@ -4,32 +4,32 @@
     "suite": "device",
     "tests": "ThemeTest",
     "file": "app/src/main/assets/reader/reader.js",
-    "old": "var themeCycle = [\"system\", \"light\", \"dark\", \"dim\", \"dusk\"];",
-    "new": "var themeCycle = [\"system\", \"light\", \"dark\", \"dusk\"];"
+    "old": "var THEMES = [\"system\", \"light\", \"dark\", \"dim\", \"dusk\"];",
+    "new": "var THEMES = [\"system\", \"light\", \"dark\", \"dusk\"];"
   },
   {
     "name": "Name System without the theme it shows",
     "suite": "device",
     "tests": "ThemeTest",
     "file": "app/src/main/assets/reader/reader.js",
-    "old": "      ? \"System (\" + titleCase(shownTheme(theme)) + \")\"",
+    "old": "      ? \"System (\" + (systemTheme.matches ? \"Dark\" : \"Light\") + \")\"",
     "new": "      ? \"System\""
   },
   {
     "name": "Give Dusk Dark's canvas",
     "suite": "device",
     "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android.css",
+    "file": "app/src/main/assets/reader/reader.css",
     "old": "  --canvas: #221e19;",
     "new": "  --canvas: #0e0d0b;"
   },
   {
-    "name": "Keep the desktop's border in Dark",
+    "name": "Put back the desktop's old border in Dark",
     "suite": "device",
     "tests": "ThemeTest",
-    "file": "app/src/main/assets/reader/android.css",
-    "old": ":root[data-theme=\"dark\"] {\n  --border: #2b2924;\n}\n",
-    "new": ""
+    "file": "app/src/main/assets/reader/reader.css",
+    "old": ":root[data-theme=\"dark\"] {\n  color-scheme: dark;\n  --canvas: var(--neutral-950);\n  --surface: var(--neutral-900);\n  --surface-muted: var(--neutral-800);\n  --surface-hover: #24221e;\n  --border: var(--neutral-800);",
+    "new": ":root[data-theme=\"dark\"] {\n  color-scheme: dark;\n  --canvas: var(--neutral-950);\n  --surface: var(--neutral-900);\n  --surface-muted: var(--neutral-800);\n  --surface-hover: #24221e;\n  --border: #2f2c27;"
   },
   {
     "name": "Drop Dim's dot colour",

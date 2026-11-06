@@ -150,7 +150,7 @@
     --surface: var(--neutral-900);
     --surface-muted: var(--neutral-800);
     --surface-hover: #24221e;
-    --border: #2f2c27;
+    --border: var(--neutral-800);
     --border-strong: var(--neutral-700);
     --text-primary: var(--neutral-50);
     --text-secondary: var(--neutral-300);
@@ -175,7 +175,7 @@
   --surface: var(--neutral-900);
   --surface-muted: var(--neutral-800);
   --surface-hover: #24221e;
-  --border: #2f2c27;
+  --border: var(--neutral-800);
   --border-strong: var(--neutral-700);
   --text-primary: var(--neutral-50);
   --text-secondary: var(--neutral-300);
@@ -191,6 +191,63 @@
   --warning-text: #fbbf24;
   --wordmark-surface: var(--neutral-50);
   --wordmark-ink: var(--neutral-950);
+}
+
+/* Dim and Dusk are LeanMark's softer dark themes for long reading, with its
+   exact colours. Body text is near 10:1 against the canvas, against 18:1 in
+   Dark. Each block sets every token the dark blocks set, so it wins over the
+   system-dark block above whatever the system setting is. The tokens LeanMark
+   does not have take the LeanMark token that plays their part: hover is the
+   muted surface, the strong border is the quote rule, the document canvas is
+   the code canvas, and the notice is the muted surface with the border. */
+:root[data-theme="dim"] {
+  color-scheme: dark;
+  --canvas: #1e2023;
+  --surface: #25282c;
+  --surface-muted: #2d3035;
+  --surface-hover: #2d3035;
+  --border: #393d43;
+  --border-strong: #4a4f56;
+  --text-primary: #c8ccd2;
+  --text-secondary: #9ea4ac;
+  --text-disabled: #6c727a;
+  --ring: #6c9be0;
+  --link: #86aee6;
+  --link-hover: #a6c4ee;
+  --selection: #34486a;
+  --doc-canvas: #282b30;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
+  --notice-surface: #2d3035;
+  --notice-border: #393d43;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
+  --wordmark-surface: #c8ccd2;
+  --wordmark-ink: #1e2023;
+}
+
+:root[data-theme="dusk"] {
+  color-scheme: dark;
+  --canvas: #221e19;
+  --surface: #29241e;
+  --surface-muted: #322c25;
+  --surface-hover: #322c25;
+  --border: #3f3830;
+  --border-strong: #574c3f;
+  --text-primary: #d4c8b4;
+  --text-secondary: #a99c87;
+  --text-disabled: #776c5c;
+  --ring: #c99a62;
+  --link: #e0a86e;
+  --link-hover: #ebc08f;
+  --selection: #4d3f2c;
+  --doc-canvas: #2c2721;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 22px rgb(0 0 0 / 35%);
+  --notice-surface: #322c25;
+  --notice-border: #3f3830;
+  --notice-icon: #f59e0b;
+  --warning-text: #fbbf24;
+  --wordmark-surface: #d4c8b4;
+  --wordmark-ink: #221e19;
 }
 
 :root[data-theme="light"] {
@@ -850,6 +907,14 @@ body {
     background: #1b2540;
     color: #bfd3ff;
   }
+}
+
+/* After the system-dark rule above, which would otherwise win on a dark system. */
+:root[data-theme="dim"] .outline-list a[aria-current="location"],
+:root[data-theme="dusk"] .outline-list a[aria-current="location"] {
+  background: var(--surface-muted);
+  box-shadow: inset 2px 0 0 var(--link);
+  color: var(--link-hover);
 }
 
 .outline-list a[data-level="1"] {
