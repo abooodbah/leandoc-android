@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Recreate the activity on a light or dark switch",
+    "suite": "device",
+    "tests": "SystemThemeTest",
+    "file": "app/src/main/AndroidManifest.xml",
+    "old": "|navigation|uiMode\"",
+    "new": "|navigation\""
+  },
+  {
+    "name": "Do not tell the page the system's scheme",
+    "suite": "device",
+    "tests": "SystemThemeTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "        applyBarColors()\n        send(HostMessages.systemScheme(isNight()))\n",
+    "new": "        applyBarColors()\n"
+  },
+  {
+    "name": "Recolour a chosen theme too",
+    "suite": "device",
+    "tests": "SystemThemeTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "swatch.dataset.swatch !== \"system\" || !pageDark",
+    "new": "!pageDark"
+  },
+  {
+    "name": "Keep the bars' colours after the switch",
+    "suite": "device",
+    "tests": "SystemThemeTest",
+    "file": "app/src/main/kotlin/io/github/abooodbah/leandoc/MainActivity.kt",
+    "old": "        super.onConfigurationChanged(newConfig)\n        applyBarColors()\n",
+    "new": "        super.onConfigurationChanged(newConfig)\n"
+  }
+]

@@ -42,8 +42,41 @@
   // when the back gesture should close an open sheet.
   var CLOSE_SHEET = '{"type":"closeSheet"}';
 
+  // The system's light and dark setting as the app sees it. The page's
+  // prefers-color-scheme follows the system only when the page is created,
+  // so after a switch with the page kept, System would keep the old colours.
+  // Then the page shows the matching Light or Dark tokens (data-theme), while
+  // the reader's theme, its button and the app's choice stay System.
+  var systemDark = null;
+  var SYSTEM_DARK = '{"type":"systemScheme","dark":true}';
+  var SYSTEM_LIGHT = '{"type":"systemScheme","dark":false}';
+  var pageDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function followSystem() {
+    var swatch = document.getElementById("themeSwatch");
+    var root = document.documentElement;
+    if (systemDark === null || !swatch || swatch.dataset.swatch !== "system" || !pageDark) {
+      return;
+    }
+    var wanted = pageDark.matches === systemDark ? null : (systemDark ? "dark" : "light");
+    if (root.getAttribute("data-theme") !== wanted) {
+      if (wanted) {
+        root.setAttribute("data-theme", wanted);
+      } else {
+        root.removeAttribute("data-theme");
+      }
+    }
+  }
+
   function receive(event) {
-    if (event.data === CLOSE_SHEET) {
+    if (event.data === SYSTEM_DARK || event.data === SYSTEM_LIGHT) {
+      var started = window.performance ? performance.now() : 0;
+      systemDark = event.data === SYSTEM_DARK;
+      followSystem();
+      if (started && window.requestAnimationFrame) {
+        timeAction("scheme", started);
+      }
+    } else if (event.data === CLOSE_SHEET) {
       closeSheet(true);
     } else if (window.LeanDocHost && typeof event.data === "string") {
       window.LeanDocHost.receive(event.data);
@@ -585,6 +618,16 @@
   }, true);
 
   document.addEventListener("DOMContentLoaded", function () {
+    // After the reader applies a theme (it removes data-theme for System),
+    // and when the page's own scheme changes.
+    var swatch = document.getElementById("themeSwatch");
+    if (swatch && window.MutationObserver) {
+      new MutationObserver(followSystem).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      new MutationObserver(followSystem).observe(swatch, { attributes: true, attributeFilter: ["data-swatch"] });
+    }
+    if (pageDark && pageDark.addEventListener) {
+      pageDark.addEventListener("change", followSystem);
+    }
     var toolbar = document.querySelector(".toolbar");
     var identity = document.querySelector(".identity");
     var moved = ["themeButton", "editorButton", "openButton"].map(function (id) {
