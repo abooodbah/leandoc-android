@@ -193,7 +193,10 @@ class ThemeTest {
         Reader.waitFor(scenario, "!document.getElementById('settingsPanel').hidden")
         Reader.js(scenario, "document.querySelector('input[name=\"settings-theme\"][value=\"$theme\"]').click()")
         val attribute = if (theme == "system") "null" else "'$theme'"
-        Reader.waitFor(scenario, "document.documentElement.getAttribute('data-theme') === $attribute")
+        // The dot too: on System the page may show Light's or Dark's colours
+        // (data-theme) to follow the system, before the reader applies the
+        // choice.
+        Reader.waitFor(scenario, "document.documentElement.getAttribute('data-theme') === $attribute && document.getElementById('themeSwatch').dataset.swatch === '$theme'")
         Reader.js(scenario, "document.getElementById('settingsClose').click()")
         Reader.waitFor(scenario, "document.getElementById('settingsPanel').hidden")
     }
