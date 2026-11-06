@@ -37,7 +37,7 @@ Pull requests, in order:
 | 3 | #20 Five themes and the theme dot; settings button and sheet | merged |
 | 4 | #21 Port LeanDoc desktop's merged reader changes (Dim and Dusk, settle pass, find, zoom and view fixes) | merged |
 | 4 | #23 Port the desktop's theme dot, settings panel, toolbar, page colour and highlight look | merged |
-| 5 | Release 0.2.0 | last |
+| 5 | #24 Release 0.2.0: version 0.2.0 (code 4), CHANGELOG.md, store and site texts | merged; tag and pre-release from the maintainer's PC |
 
 ### Efficiency review
 
@@ -167,7 +167,9 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.2.0, above.
+- Round 0.2.0: merged up to the version bump. The tag v0.2.0, the
+  pre-release and the two release workflows are run from the maintainer's
+  PC; this session cannot create tags.
 
 ## Remaining
 
