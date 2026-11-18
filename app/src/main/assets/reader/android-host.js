@@ -212,6 +212,147 @@
     }
   }
 
+  // Text kept on its page at any zoom. The reader splits pages at 100% and
+  // gives each section of a split page the height it was measured at; what
+  // does not fit in that height goes to a column beside the section, past
+  // the page's edge. At the smaller zoom that fits a page to a phone, lines
+  // and table rows take a little more room than at 100%, so the last line
+  // of a column or the last row of a table could end up there, cut off. A
+  // section with text past its edge grows until the text is back inside
+  // it; the page grows with it. Pages are looked at as they come on
+  // screen, and again after each change of zoom, from the height the reader
+  // gave them.
+  var keepOnPage = (function () {
+    var GROWN = "data-android-height";
+    var MAX_STEPS = 12;
+    var observer = null;
+    var grown = [];
+
+    // How far, in the section's own CSS pixels, its content reaches into
+    // columns past its right edge, or 0. The boxes are compared with the
+    // section's own box, so this holds on WebView before 128 too, where
+    // boxes inside a zoomed page are reported unzoomed.
+    function overflow(article) {
+      var box = article.getBoundingClientRect();
+      if (!(box.height > 0) || !(box.width > 0)) {
+        return 0;
+      }
+      var top = Infinity;
+      var bottom = -Infinity;
+      for (var node = article.lastElementChild; node; node = node.previousElementSibling) {
+        var rects = node.getClientRects();
+        var past = false;
+        for (var index = 0; index < rects.length; index += 1) {
+          var rect = rects[index];
+          if (rect.width > 0 && rect.left >= box.right - 0.5) {
+            past = true;
+            top = Math.min(top, rect.top);
+            bottom = Math.max(bottom, rect.bottom);
+          }
+        }
+        if (!past) {
+          break;
+        }
+      }
+      if (!(bottom > top)) {
+        return 0;
+      }
+      return (bottom - top) * article.offsetHeight / box.height;
+    }
+
+    function fit(article) {
+      for (var step = 0; step < MAX_STEPS; step += 1) {
+        var over = overflow(article);
+        if (!over) {
+          return;
+        }
+        var height = parseFloat(article.style.height);
+        if (!(height > 0)) {
+          return;
+        }
+        if (!article.hasAttribute(GROWN)) {
+          article.setAttribute(GROWN, article.style.height);
+          grown.push(article);
+        }
+        var columns = parseInt(window.getComputedStyle(article).columnCount, 10);
+        article.style.height = height + Math.ceil(over / (columns > 1 ? columns : 1)) + 1 + "px";
+      }
+    }
+
+    // Only a section the reader gave a height can push text past its edge.
+    function fixedSections(page) {
+      var found = [];
+      for (var article = page.firstElementChild; article; article = article.nextElementSibling) {
+        if (article.nodeName === "ARTICLE" && article.style.height) {
+          found.push(article);
+        }
+      }
+      return found;
+    }
+
+    function check(page) {
+      fixedSections(page).forEach(fit);
+    }
+
+    function pages() {
+      return document.querySelectorAll("#docBody .docx-wrapper > section.docx");
+    }
+
+    function watch() {
+      if (observer) {
+        observer.disconnect();
+      }
+      grown.splice(0).forEach(function (article) {
+        if (article.isConnected) {
+          article.style.height = article.getAttribute(GROWN);
+        }
+        article.removeAttribute(GROWN);
+      });
+      var root = document.documentElement;
+      if (root.dataset.renderState !== "ready") {
+        return;
+      }
+      var scroller = document.getElementById("docScroller");
+      if (!window.IntersectionObserver || !scroller) {
+        Array.prototype.forEach.call(pages(), check);
+        return;
+      }
+      // A page off screen is not drawn (content-visibility: auto), and the
+      // boxes Chromium reports inside it can mix zoomed and unzoomed units.
+      // A page is looked at two frames after it comes on screen, once drawn.
+      var current = observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            current.unobserve(entry.target);
+            afterNextFrame(function () {
+              if (observer === current) {
+                check(entry.target);
+              }
+            });
+          }
+        });
+      }, { root: scroller });
+      // Pages of a long document that opens in batches are not split, so
+      // none of them is watched; a rotation then costs nothing here.
+      Array.prototype.forEach.call(pages(), function (page) {
+        if (fixedSections(page).length) {
+          observer.observe(page);
+        }
+      });
+    }
+
+    return { watch: watch };
+  }());
+
+  if (window.MutationObserver) {
+    // After a render the reader sets data-render-state to "ready". A zoom
+    // step sets data-zoom and zooms the page in the next frame, before the
+    // observer first reports.
+    new MutationObserver(function () {
+      keepOnPage.watch();
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-render-state", "data-zoom"] });
+  }
+
   // On a phone the desktop toolbar wraps to three rows under the file name.
   // Below 760 px the theme, settings, other-app and Open buttons move up
   // beside the file name (android.css lays out the two rows). The buttons
