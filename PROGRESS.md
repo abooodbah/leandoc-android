@@ -115,6 +115,18 @@ Pull requests, in order. Each one updates this file when it merges.
   either build (the two-column paper: 204 to 843, 804 to 248, 864 to 860
   ms). The Strict files render 10 to 30 ms slower, as they now get their
   styles.
+- #32: no text cut off at the fit zoom. The reader splits pages at 100%
+  and gives each section of a split page the height it was measured at;
+  drawn smaller, a line or table row can take more room, and the last line
+  of a column or row of a table went past the page's edge, where the page
+  clips it. In headless Chromium 141 with Noto Serif for Times New Roman,
+  the last row of the first page of `wide-tables.docx` was cut off at 31%
+  to 66% zoom. `android-host.js` now grows such a section until its text
+  is back inside, for each page once it is on screen, and again from the
+  measured height after each zoom change. The emulator's WebView 113 lays
+  these documents out without the overflow, so `TextOnThePageTest` also
+  makes rows or paragraphs 2 px taller once the document is shown, as the
+  newer WebView does in effect.
 
 ## Round 0.2.0 (November 2026)
 
@@ -281,7 +293,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: step 4, no text cut off at the fit zoom.
+- Round 0.3.0: step 5, build provenance attestations (#31).
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
