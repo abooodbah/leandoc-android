@@ -279,12 +279,19 @@
       }
     }
 
-    function check(page) {
+    // Only a section the reader gave a height can push text past its edge.
+    function fixedSections(page) {
+      var found = [];
       for (var article = page.firstElementChild; article; article = article.nextElementSibling) {
         if (article.nodeName === "ARTICLE" && article.style.height) {
-          fit(article);
+          found.push(article);
         }
       }
+      return found;
+    }
+
+    function check(page) {
+      fixedSections(page).forEach(fit);
     }
 
     function pages() {
@@ -325,8 +332,12 @@
           }
         });
       }, { root: scroller });
+      // Pages of a long document that opens in batches are not split, so
+      // none of them is watched; a rotation then costs nothing here.
       Array.prototype.forEach.call(pages(), function (page) {
-        observer.observe(page);
+        if (fixedSections(page).length) {
+          observer.observe(page);
+        }
       });
     }
 
