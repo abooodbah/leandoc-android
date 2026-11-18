@@ -5,8 +5,9 @@
 #   scripts/update-reader-assets.sh /path/to/leandoc
 #
 # The desktop checkout needs `npm ci` first, for docx-preview, JSZip and the
-# fonts. For a copy of the desktop files that is not a git checkout, give
-# its commit in DESKTOP_COMMIT.
+# fonts, and Node.js for the test documents below. For a copy of the
+# desktop files that is not a git checkout, give its commit in
+# DESKTOP_COMMIT.
 set -eu
 
 desktop=${1:?usage: scripts/update-reader-assets.sh /path/to/leandoc}
@@ -58,10 +59,14 @@ cp "$desktop/tests/core/CoreTests.cpp" "$desktop/tests/core/TestZip.cpp" \
 fixtures="$here/app/src/androidTest/assets/fixtures"
 # Only the desktop's folders are replaced; store/ holds Android's own
 # screenshot document.
-rm -rf "$fixtures/features" "$fixtures/kinds" "$fixtures/security"
+rm -rf "$fixtures/features" "$fixtures/kinds" "$fixtures/security" "$fixtures/reader"
 mkdir -p "$fixtures"
 cp -R "$desktop/tests/fixtures/features" "$desktop/tests/fixtures/kinds" \
   "$desktop/tests/fixtures/security" "$fixtures/"
+# reader/: the documents the desktop's reader tests build at test time (two
+# columns, floating boxes, wide tables, dot leaders), made by the desktop's
+# own generators.
+node "$here/scripts/desktop-test-documents.mjs" "$desktop" "$fixtures/reader"
 cp "$desktop/tests/fixtures/expected.json" "$desktop/tests/fixtures/expected.inc" \
   "$desktop/tests/fixtures/README.md" "$desktop/tests/fixtures/make-fixtures.py" "$fixtures/"
 
