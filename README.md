@@ -22,6 +22,21 @@ the test; try again a day later. Google asks testers to keep the app installed
 for 14 days. The APK is also attached to each
 [Android release](https://github.com/abooodbah/leandoc-android/releases).
 
+## Checking a download
+
+Each file on a release page has a `.sha256` file beside it. Releases from
+0.3.0 on also carry a build provenance attestation for the APK and the
+bundle: a record, signed through GitHub, that the file was built by this
+repository's release workflow from the tagged source. To check a
+downloaded file with the GitHub CLI:
+
+```sh
+gh attestation verify <file> --repo abooodbah/leandoc-android
+```
+
+This shows where a file was built. It is not code signing: Android checks
+the APK's own signature when it installs it, as before.
+
 ## Building
 
 You need JDK 17 and the Android SDK (platform 36). Then:

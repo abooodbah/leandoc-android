@@ -115,6 +115,15 @@ Pull requests, in order. Each one updates this file when it merges.
   either build (the two-column paper: 204 to 843, 804 to 248, 864 to 860
   ms). The Strict files render 10 to 30 ms slower, as they now get their
   styles.
+- #31: the release workflow records a build provenance attestation for
+  the release APK and bundle (actions/attest-build-provenance v4.2.2,
+  pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8), after the signer
+  check and the hashes and before the files are attached; the job has
+  `id-token: write` and `attestations: write`. The README says how to
+  check a download with `gh attestation verify`. `ReleaseWorkflowTest`
+  reads `release.yml`; the repository had no workflow checks before. The
+  workflow itself runs only for a tag, so its first run is the 0.3.0
+  release.
 
 ## Round 0.2.0 (November 2026)
 
