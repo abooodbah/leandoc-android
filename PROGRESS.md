@@ -78,6 +78,16 @@ Pull requests, in order. Each one updates this file when it merges.
    release and the Play bundle run are left to the maintainer: this session
    cannot push tags.
 
+### Done in round 0.3.0
+
+- #27: this plan.
+- #29: the budgets job times opening each test document from a cold
+  start, three times per build in turn, with page counts, the drawn time
+  and the reader's render time. Run on two builds of the same app (run
+  44318752309): the sum over 23 documents differed by 0.7% (41,895 against
+  42,172 ms), single documents by up to 25% (notes-superscript.docx,
+  1,511 against 1,890 ms). Compare sums, not single documents.
+
 ## Round 0.2.0 (November 2026)
 
 The request: make LeanDoc for Android look and work like the other Lean
@@ -243,7 +253,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: plan merged (#27); step 2, timing the test documents.
+- Round 0.3.0: step 3, the port of desktop v0.3.2 (#30).
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
