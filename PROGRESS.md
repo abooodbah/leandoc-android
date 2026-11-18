@@ -86,7 +86,35 @@ Pull requests, in order. Each one updates this file when it merges.
   and the reader's render time. Run on two builds of the same app (run
   44318752309): the sum over 23 documents differed by 0.7% (41,895 against
   42,172 ms), single documents by up to 25% (notes-superscript.docx,
-  1,511 against 1,890 ms). Compare sums, not single documents.
+  1,511 against 1,890 ms). A second run of the same APKs (44322041344)
+  differed by 2.7% in the sum. Compare sums, not single documents.
+- #30: the reader from desktop v0.3.2 through
+  `scripts/update-reader-assets.sh` (reader.js, fixups.js and reader.css;
+  the core, its tests and the desktop fixtures were unchanged). The script
+  also writes the documents the desktop's reader tests build at test time
+  into `fixtures/reader/` (`scripts/desktop-test-documents.mjs`, the
+  desktop's own generators; JSZip's clock-dated folder entries get the
+  generator's date, so the bytes repeat). `PaperLayoutTest` checks, at the
+  phone's fit zoom, on a 320 dp phone, in landscape and after swipes: the
+  floating table at the top of its page and the figure at its foot across
+  both columns with no text under them, the columns, the references'
+  hanging indent, the contents leader, tables inside the page and their
+  text inside the cells, Word's page count for the two 0.3.1 documents (2
+  and 3 pages; main gave 3 and 4), Strict OOXML list numbers, the paper cut
+  short, and the 300-page document. On the tests-only commit 11 of them
+  failed (run 44319002438). The fixture provider serves names ending in
+  `-cut` cut short. The phone test files gain the two-column paper.
+  Measured in three budgets runs (44319086122, 44321116281, 44323772465),
+  main against the branch: the APK 1,543,829 to 1,567,345 bytes (+1.5%);
+  opening 30 test documents, sum of medians, +1.0%, +2.1% and +0.9%;
+  `styles.docx` drawn minus the empty app 1,113 to 1,152, 1,207 to 1,250
+  and 1,123 to 948 ms; the 300-page document drawn 3,246 to 3,253 and
+  3,540 to 3,809 ms; total PSS after it 152,632 to 156,313, 152,750 to
+  155,858 and 153,805 to 157,195 KB (+2.0 to 2.4%, the renderer about
+  3.5 MB more). Single render times jump by about 500 ms at random in
+  either build (the two-column paper: 204 to 843, 804 to 248, 864 to 860
+  ms). The Strict files render 10 to 30 ms slower, as they now get their
+  styles.
 
 ## Round 0.2.0 (November 2026)
 
@@ -253,7 +281,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: step 3, the port of desktop v0.3.2 (#30).
+- Round 0.3.0: step 4, no text cut off at the fit zoom.
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
@@ -281,6 +309,18 @@ apart; here 44 of 45 were in the fast group. The 1,674 against 1,512 ms in
 the last port's budgets were main before and after that port, not 0.1.2.
 
 ## Known gaps
+
+- Android draws Times New Roman in the phone's own serif font (Noto
+  Serif), which is wider. The desktop's two-column test paper takes 5
+  pages on the emulator where Word gives 4; the first line of one of its
+  references has a 4.5 pt tab after its number instead of 9.8 pt; and
+  its contents entry, nearly as long as the line in that font, wraps and
+  ends its page number at 383 pt instead of the 450 pt stop, at 100%
+  too: the desktop reader sizes the tab before the line wraps. The same
+  happens on the desktop with a font as wide.
+- The CI emulator has Android System WebView 113. Phones with current
+  WebView lay text out a little differently; headless Chromium 141 with
+  the same serif font is the closer check, and was used for it.
 
 - Images and documents linked from outside the file are not shown, by
   design: they would need the network.
