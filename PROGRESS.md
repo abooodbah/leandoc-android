@@ -42,23 +42,23 @@ changed `assets/reader.js`, `fixups.js` and `reader.css` only: `src/core/`,
 Pull requests, in order. Each one updates this file when it merges.
 
 1. This plan.
-2. The desktop's reader test documents as fixtures: the documents the
-   desktop's reader tests build at test time (`tests/reader/make-*.mjs`)
-   for floating boxes, two-column sections, wide tables and a contents line
-   with dot leaders, written by `scripts/update-reader-assets.sh`, so the
-   emulator tests and the budgets job open the same files as the desktop
-   tests. The repository's own fixtures have no two-column page and no
-   floating table.
+2. No text cut off at the fit zoom. In a headless Chromium check at phone
+   widths, the desktop's two-column test paper loses the last line of a
+   column past the page's edge at 36%, 43% and 66% zoom on main: pages are
+   split at 100% and drawn smaller, where lines take a little more room.
+   With the v0.3.2 reader the page clips at its edge, and a long table
+   loses its last row at 31% to 66%. Failing emulator tests first, then the
+   fix. The tests open the documents the desktop's reader tests build at
+   test time (`tests/reader/make-*.mjs`): floating boxes in a two-column
+   paper, two-column sections, wide tables and a contents line with dot
+   leaders. `scripts/update-reader-assets.sh` writes them into the
+   fixtures, so the emulator tests and the budgets job open the same files
+   as the desktop tests. The repository's own fixtures have no two-column
+   page and no floating table.
 3. The budgets job times opening each of these documents and the
    repository's feature fixtures, for main and the branch, next to the
    300-page document it already times.
-4. No text cut off at the fit zoom. In a headless Chromium check at phone
-   widths, the desktop's two-column paper loses the last line of a column
-   past the page's edge at 36%, 43% and 66% zoom on main: pages are split at
-   100% and drawn smaller, where lines take a little more room. With the
-   v0.3.2 reader the page clips at its edge, and a long table loses its last
-   row at 31% to 66%. Failing emulator tests first, then the fix.
-5. The reader and core from desktop v0.3.2 through
+4. The reader and core from desktop v0.3.2 through
    `scripts/update-reader-assets.sh`. Failing emulator tests first, at the
    phone's width and fit zoom: a floating table at the top of its page
    across both columns with no text under it, two columns kept, a contents
@@ -67,10 +67,10 @@ Pull requests, in order. Each one updates this file when it merges.
    rotating. Then the port. The open-time numbers for main and the branch go
    in the pull request; over 10% slower needs a reason and, where
    reasonable, a fix.
-6. Build provenance attestations in `release.yml` (actions/attest-build-provenance
+5. Build provenance attestations in `release.yml` (actions/attest-build-provenance
    v4.2.2, pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8) and the README
    line on `gh attestation verify`.
-7. Version 0.3.0 (code 5): `CHANGELOG.md`, `README.md`, fastlane changelog
+6. Version 0.3.0 (code 5): `CHANGELOG.md`, `README.md`, fastlane changelog
    `5.txt`, release notes in `docs/releases/v0.3.0.md`. The tag, the GitHub
    release and the Play bundle run are left to the maintainer: this session
    cannot push tags.
