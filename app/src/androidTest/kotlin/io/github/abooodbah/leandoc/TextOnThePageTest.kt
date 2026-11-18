@@ -122,11 +122,12 @@ class TextOnThePageTest {
     }
 
     @Test
-    fun aGrownSectionGetsItsMeasuredHeightBackAtFullSize() = open(TABLES) { scenario ->
-        drawTallerThanMeasured(scenario, "#docBody td { padding-bottom: 2px !important; }")
+    fun aGrownSectionGetsItsMeasuredHeightBackAtFullSize() = open(PAPER) { scenario ->
+        val measured = Reader.js(scenario, MEASURED_HEIGHTS) as String
+        drawTallerThanMeasured(scenario, "#docBody article p { padding-bottom: 2px !important; }")
         everyPageKeepsItsText(scenario, fitsTheWidth = false)
-        assertTrue("a section grew", Reader.js(scenario, "document.querySelector('[data-android-height]') !== null") == true)
-        // The rows are as measured again; at 100% no section needs more room.
+        assertEquals("a section grew", true, Reader.js(scenario, "document.querySelector('[data-android-height]') !== null"))
+        // The lines are as measured again; at 100% no section needs more room.
         Reader.js(scenario, "document.getElementById('$TALLER').remove()")
         while (Reader.zoom(scenario) != "100") {
             val before = Reader.zoom(scenario)
@@ -134,7 +135,7 @@ class TextOnThePageTest {
             Reader.waitFor(scenario, "document.documentElement.dataset.zoom !== '$before' && " + ZOOM_SETTLED)
         }
         everyPageKeepsItsText(scenario, fitsTheWidth = false)
-        assertEquals("", Reader.js(scenario, PAGES_TALLER_THAN_PAPER))
+        assertEquals("every section has the height the reader measured", measured, Reader.js(scenario, HEIGHTS))
     }
 
     @Test
@@ -220,6 +221,15 @@ class TextOnThePageTest {
         const val CONTENTS = "reader/contents-leaders.docx"
 
         const val PAGES = Reader.PAGES
+
+        /** Each section's height as drawn, as JSON. */
+        const val HEIGHTS = "JSON.stringify(Array.prototype.map.call(" +
+            "document.querySelectorAll('#docBody .docx-wrapper > section.docx > article'), function (a) { return a.style.height; }))"
+
+        /** Each section's height as the reader measured it, before the app grew any. */
+        const val MEASURED_HEIGHTS = "JSON.stringify(Array.prototype.map.call(" +
+            "document.querySelectorAll('#docBody .docx-wrapper > section.docx > article'), " +
+            "function (a) { return a.getAttribute('data-android-height') || a.style.height; }))"
 
         /** The id of the style that draws rows or lines taller than measured. */
         const val TALLER = "android-test-taller"
