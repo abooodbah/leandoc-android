@@ -42,31 +42,34 @@ changed `assets/reader.js`, `fixups.js` and `reader.css` only: `src/core/`,
 Pull requests, in order. Each one updates this file when it merges.
 
 1. This plan.
-2. No text cut off at the fit zoom. In a headless Chromium check at phone
-   widths, the desktop's two-column test paper loses the last line of a
-   column past the page's edge at 36%, 43% and 66% zoom on main: pages are
-   split at 100% and drawn smaller, where lines take a little more room.
-   With the v0.3.2 reader the page clips at its edge, and a long table
-   loses its last row at 31% to 66%. Failing emulator tests first, then the
-   fix. The tests open the documents the desktop's reader tests build at
-   test time (`tests/reader/make-*.mjs`): floating boxes in a two-column
-   paper, two-column sections, wide tables and a contents line with dot
-   leaders. `scripts/update-reader-assets.sh` writes them into the
-   fixtures, so the emulator tests and the budgets job open the same files
-   as the desktop tests. The repository's own fixtures have no two-column
-   page and no floating table.
-3. The budgets job times opening each of these documents and the
-   repository's feature fixtures, for main and the branch, next to the
-   300-page document it already times.
-4. The reader and core from desktop v0.3.2 through
-   `scripts/update-reader-assets.sh`. Failing emulator tests first, at the
-   phone's width and fit zoom: a floating table at the top of its page
-   across both columns with no text under it, two columns kept, a contents
-   line with its dot leader, wide tables inside the page, each after
-   opening through ACTION_VIEW with a content:// URI, scrolling and
-   rotating. Then the port. The open-time numbers for main and the branch go
-   in the pull request; over 10% slower needs a reason and, where
-   reasonable, a fix.
+2. The budgets job times opening each test document from a cold start
+   (the feature fixtures, the desktop's reader test documents once they are
+   fixtures, the Strict OOXML file and the store document), for main and
+   the branch, next to the 300-page document it already times.
+3. The reader and core from desktop v0.3.2 through
+   `scripts/update-reader-assets.sh`. The repository's own fixtures have no
+   two-column page and no floating table, so the tests open the documents
+   the desktop's reader tests build at test time (`tests/reader/make-*.mjs`),
+   which the update script now writes into `fixtures/reader/` with the
+   desktop's own generators. Failing emulator tests first, at the phone's
+   width and fit zoom: a floating table at the top of its page and a figure
+   at its foot, across both columns, with no text under them; two columns
+   kept; references at their hanging indent; a contents line with its dot
+   leader; wide tables inside the page; Word's page count where 0.3.1 fixed
+   near-empty pages; Strict OOXML lists. Also on a small phone, in
+   landscape and after scrolling by touch. Then the port. The open-time
+   numbers for main and the branch go in the pull request; over 10% slower
+   needs a reason and, where reasonable, a fix.
+4. No text cut off at the fit zoom. In a headless Chromium 141 check at
+   phone widths, the desktop's two-column test paper lost the last line of
+   a column past the page's edge at 36%, 43% and 66% zoom with the main
+   reader, and with the v0.3.2 reader a long table lost its last row at 31%
+   to 66%: pages are split at 100% and drawn smaller, where lines take a
+   little more room. The first try (#28, closed) put the tests before the
+   port; on the CI emulator (WebView 113) the main reader did not lose
+   those lines, and its tests failed only on a text box that the 0.2.0
+   reader draws 3 px past the page, which the port fixes. So the tests and
+   the fix come after the port.
 5. Build provenance attestations in `release.yml` (actions/attest-build-provenance
    v4.2.2, pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8) and the README
    line on `gh attestation verify`.
@@ -240,7 +243,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: plan above, step 1.
+- Round 0.3.0: plan merged (#27); step 2, timing the test documents.
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
