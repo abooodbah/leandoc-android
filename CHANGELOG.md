@@ -3,6 +3,63 @@
 All notable changes to LeanDoc for Android. The project follows semantic
 versioning. Each entry is also the text of that version's GitHub release.
 
+## [0.3.0] - 2026-11-18
+
+LeanDoc for Android 0.3.0 lays pages out as LeanDoc desktop 0.3.2 does,
+closer to Microsoft Word. It is a pre-release; on Google Play the app is in a
+closed test.
+
+### Changed
+
+- From LeanDoc desktop 0.3.0: tables, figures and text boxes that Word floats
+  at the top or foot of a page sit there, across the columns, and text no
+  longer runs over them.
+- Two-column papers keep their two columns, and their references keep a
+  hanging indent.
+- Contents pages keep their dot leaders and right-aligned page numbers.
+- Numbered headings take Word's indents. A section without a header of its
+  own takes the previous one. A footnote with its own mark shows that mark.
+  Long equations wrap inside their column. A page that starts inside a word
+  ends with a hyphen. Small capitals are drawn at Word's size.
+- Files saved in Word's Strict format keep their styles, lists and notes.
+- From LeanDoc desktop 0.3.1: fewer near-empty extra pages.
+
+### Fixed
+
+- At the zoom that fits a page to the phone, the last line of a column or
+  the last row of a table could be cut off at the page's edge. The page now
+  grows to hold it.
+
+### Added
+
+- The APK and the bundle of each release carry a build provenance
+  attestation. Check a download with
+  `gh attestation verify <file> --repo abooodbah/leandoc-android`. It shows
+  where a file was built; it is not code signing.
+
+### Measured
+
+On an API 34 emulator without a GPU, release builds taking turns. With the
+desktop 0.3.2 reader, against 0.2.0: opening 30 test documents took between
+0.5% less and 2.1% more time in four runs (two runs of one build differ by
+up to 2.7%), and memory after the 300-page document is about 3 MB (2%)
+higher. Keeping text on the page added nothing measurable (0.8% less and
+0.1% more in two runs). The APK is 1,568,933 bytes, 25,104 more than 0.2.0. Start time,
+scrolling and memory on a real phone were not measured; the phone test is
+in PROGRESS.md.
+
+### Known gaps
+
+- Android draws Times New Roman in the phone's own serif font, which is
+  wider, so a page can hold less than in Word: the desktop's two-column test
+  paper takes 5 pages where Word gives 4.
+- A contents entry that nearly fills its line can wrap, and its page number
+  then stops short of the right edge.
+- On Android System WebView older than 128 the outline's marked section can
+  move on later than the heading passes.
+- The keyboard shortcut list of the desktop is not shown; a hardware
+  keyboard's shortcuts still work.
+
 ## [0.2.0] - 2026-11-06
 
 LeanDoc for Android 0.2.0 looks and works like the other Lean Apps, with

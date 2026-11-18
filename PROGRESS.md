@@ -135,7 +135,14 @@ Pull requests, in order. Each one updates this file when it merges.
   measured height after each zoom change. The emulator's WebView 113 lays
   these documents out without the overflow, so `TextOnThePageTest` also
   makes rows or paragraphs 2 px taller once the document is shown, as the
-  newer WebView does in effect.
+  newer WebView does in effect. Only pages with a section of fixed height
+  are watched: watching all 300 pages of the long document made rotation
+  56 and 62 ms slower; with the change it measured 418 against 553 ms.
+  Opening 30 test documents: -0.8%, +6.0% and +0.1% in three runs; APK
+  1,568,933 bytes.
+- #33: version 0.3.0 (code 5): `CHANGELOG.md`, `docs/releases/v0.3.0.md`
+  (the same notes), fastlane `changelogs/5.txt`, and a README line on
+  both. No code changes.
 
 ## Round 0.2.0 (November 2026)
 
@@ -302,13 +309,21 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: step 6, the version bump to 0.3.0.
+- Round 0.3.0: merged up to the version bump (#33). The tag v0.3.0, the
+  GitHub release (its notes are the 0.3.0 entry of `CHANGELOG.md`) with the
+  "Release files" workflow, which now also attests the APK and bundle, and
+  the "Play bundle" workflow are run from the maintainer's PC: this
+  session cannot push tags.
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
 ## Remaining
 
-- The phone test below, on real hardware.
+- Tag v0.3.0, publish the release and run "Release files" and "Play
+  bundle" for it; then check one download with `gh attestation verify`.
+- The phone test below, on real hardware, now with the two-column paper:
+  check that its floating table and figure, its columns and its last lines
+  are all on the page at the fit zoom.
 - Play Console setup and the closed test (see `store/closed-test.md`);
   these need the maintainer's account.
 
