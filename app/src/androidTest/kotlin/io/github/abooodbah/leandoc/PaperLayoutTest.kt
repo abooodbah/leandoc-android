@@ -76,6 +76,20 @@ class PaperLayoutTest {
     @Test
     fun aContentsLineKeepsItsDotLeaderToThePageNumber() = open(CONTENTS) { scenario ->
         Reader.bringPageIntoView(scenario, 0)
+        assertEquals("", probe(scenario, "L.leader(0)"))
+    }
+
+    // Word ends the page number at the dotted stop, 450 pt from the margin.
+    // The reader sizes tabs at 100%; drawn smaller, the line can take more
+    // room (on the emulator's WebView 113 it wraps).
+    @Test
+    fun atFullSizeTheContentsPageNumberEndsAtItsStop() = open(CONTENTS) { scenario ->
+        while (Reader.zoom(scenario) != "100") {
+            val before = Reader.zoom(scenario)
+            Reader.js(scenario, "document.getElementById('zoomIn').click()")
+            Reader.waitFor(scenario, "document.documentElement.dataset.zoom !== '$before' && ${Reader.ZOOM_SETTLED}")
+        }
+        Reader.bringPageIntoView(scenario, 0)
         assertEquals("", probe(scenario, "L.leader(450)"))
     }
 
@@ -368,31 +382,33 @@ class PaperLayoutTest {
                 });
                 return count ? seen : problem;
               },
-              // The contents line: a dot leader, then the page number, which ends at
-              // the right tab stop `stopPt` from the left margin, on the line where the
-              // leader ends. How long the leader is depends on the font: Android draws
-              // Times New Roman in the phone's own serif font, which is wider.
-              leader: function (stopPt) {
-                var leader = document.querySelector('#docBody span.ld-tab-leader');
-                if (!leader) return 'no tab leader';
-                if (leader.textContent.indexOf('.') < 0) return 'the leader is "' + leader.textContent.slice(0, 10) + '"';
-                var page = leader.closest('section.docx');
-                var s = this.scale(page);
-                var area = this.textArea(page);
-                var number = leader.nextSibling;
-                if (!number || !/[0-9]/.test(number.textContent)) return 'no page number after the leader';
-                var range = document.createRange();
-                range.selectNodeContents(number);
-                var box = range.getBoundingClientRect();
-                var end = (box.right - area.left) / s * 0.75;
-                if (Math.abs(end - stopPt) > 1.5) return 'the page number ends ' + end.toFixed(1) + ' pt from the margin; the stop is at ' + stopPt + ' pt';
-                var dots = this.lines(leader);
-                if (!dots.length) return 'the leader is not drawn';
-                if (Math.abs(dots[dots.length - 1].bottom - box.bottom) > 3 * s) return 'the page number is not on the line where the leader ends';
-                if (box.right > area.right + 1) return 'the page number ends past the text area';
-                return '';
-              },
-              // On page `index`: every table inside the text area, every cell's text
+              // The contents line: a dot leader, then the page number on the
+            // line where the leader ends, inside the text area. With `stopPt`,
+            // the number also ends at that right tab stop, in points from the
+            // left margin. How long the leader is depends on the font:
+            // Android draws Times New Roman in the phone's own serif font,
+            // which is wider.
+            leader: function (stopPt) {
+              var leader = document.querySelector('#docBody span.ld-tab-leader');
+              if (!leader) return 'no tab leader';
+              if (leader.textContent.indexOf('.') < 0) return 'the leader is "' + leader.textContent.slice(0, 10) + '"';
+              var page = leader.closest('section.docx');
+              var s = this.scale(page);
+              var area = this.textArea(page);
+              var number = leader.nextSibling;
+              if (!number || !/[0-9]/.test(number.textContent)) return 'no page number after the leader';
+              var range = document.createRange();
+              range.selectNodeContents(number);
+              var box = range.getBoundingClientRect();
+              var dots = this.lines(leader);
+              if (!dots.length) return 'the leader is not drawn';
+              if (Math.abs(dots[dots.length - 1].bottom - box.bottom) > 3 * s) return 'the page number is not on the line where the leader ends';
+              if (box.right > area.right + 1) return 'the page number ends past the text area';
+              var end = (box.right - area.left) / s * 0.75;
+              if (stopPt && Math.abs(end - stopPt) > 1.5) return 'the page number ends ' + end.toFixed(1) + ' pt from the margin; the stop is at ' + stopPt + ' pt';
+              return '';
+            },
+            // On page `index`: every table inside the text area, every cell's text
               // inside its cell.
               tables: function (index) {
                 var self = this;
