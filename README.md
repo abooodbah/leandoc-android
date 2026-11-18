@@ -22,6 +22,10 @@ the test; try again a day later. Google asks testers to keep the app installed
 for 14 days. The APK is also attached to each
 [Android release](https://github.com/abooodbah/leandoc-android/releases).
 
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and the
+notes of each release from 0.3.0 on are in [docs/releases/](docs/releases/).
+The current version is 0.3.0.
+
 ## Checking a download
 
 Each file on a release page has a `.sha256` file beside it. Releases from
