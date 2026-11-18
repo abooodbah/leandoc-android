@@ -94,6 +94,15 @@ minus() {
   if [[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]]; then echo $(($1 - $2)); else echo NA; fi
 }
 
+# The change from $1 to $2 in percent, as "+4.2%", or NA.
+percent() {
+  if [[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ && "$1" -gt 0 ]]; then
+    awk -v a="$1" -v b="$2" 'BEGIN { printf "%+.1f%%", (b - a) * 100 / a }'
+  else
+    echo NA
+  fi
+}
+
 plus() {
   if [[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]]; then echo $(($1 + $2)); else echo NA; fi
 }
@@ -262,6 +271,46 @@ for label in "${LABELS[@]}"; do
   P90[$label]=$(sed -n 's/^90th percentile: *//p' <<<"$gfx" | head -n 1)
   log "$label scrolling: frames ${FRAMES[$label]:-NA}, janky ${JANK[$label]:-NA}, p90 ${P90[$label]:-NA}"
 done
+
+# Opening each test document from a cold start, for every build in turn:
+# the feature fixtures, the desktop's reader test documents (two columns,
+# floating boxes, wide tables, contents), the Strict OOXML file and the
+# store document. "Drawn" is the app's reportFullyDrawn time; "render" is
+# the reader's own time from the document message to the drawn pages, and
+# it also gives the page count. OPEN_DOCUMENTS=no leaves this out.
+OPEN_ROUNDS=${OPEN_ROUNDS:-3}
+FIXTURE_DIR=${FIXTURE_DIR:-app/src/androidTest/assets/fixtures}
+declare -a OPEN_DOCS=()
+if [ "${OPEN_DOCUMENTS:-yes}" = yes ] && [ -d "$FIXTURE_DIR" ]; then
+  mapfile -t OPEN_DOCS < <(cd "$FIXTURE_DIR" && ls features/*.docx reader/*.docx kinds/strict.docx store/*.docx 2>/dev/null | LC_ALL=C sort)
+fi
+
+# "PAGES MS" from the reader's "rendered" line, or "NA NA".
+rendered_line() {
+  local line
+  line=$(adb logcat -d -v raw -s "${TIMING_TAG:-none}:I" | tr -d '\r' | sed -n 's/^rendered \([0-9][0-9]*\) pages in \([0-9][0-9]*\) ms$/\1 \2/p' | head -n 1)
+  echo "${line:-NA NA}"
+}
+
+declare -A OPEN_DRAWN=() OPEN_RENDER=() OPEN_PAGES=()
+if [ "${#OPEN_DOCS[@]}" -gt 0 ]; then
+  for round in $(seq 1 "$OPEN_ROUNDS"); do
+    for label in "${LABELS[@]}"; do
+      install "$label"
+      open_document "$SMALL" "$SMALL_TYPE" >/dev/null # Warm-up after install.
+      fully_drawn 10 >/dev/null
+      for doc in "${OPEN_DOCS[@]}"; do
+        open_document "$doc" "$SMALL_TYPE" >/dev/null
+        drawn=$(fully_drawn 60)
+        read -r pages render < <(rendered_line)
+        OPEN_DRAWN["$label|$doc"]+="$drawn"$'\n'
+        OPEN_RENDER["$label|$doc"]+="$render"$'\n'
+        OPEN_PAGES["$label|$doc"]=$pages
+      done
+      log "round $round $label: opened ${#OPEN_DOCS[@]} test documents"
+    done
+  done
+fi
 
 # Reader actions on the large document, as keys from a hardware keyboard:
 # each time is what the page reports from the key (or typed letter) to the
@@ -467,6 +516,42 @@ row() {
       for label in "${LABELS[@]}"; do printf ' %s |' "$(median <<<"${PHASES[$label|$name]:-}")"; done
       printf '\n'
     done
+  fi
+  if [ "${#OPEN_DOCS[@]}" -gt 0 ]; then
+    echo
+    echo "Opening each test document from a cold start (median of $OPEN_ROUNDS): drawn is"
+    echo "the app's reportFullyDrawn time, render the reader's own time to the drawn pages."
+    echo
+    printf '| Document |'
+    for label in "${LABELS[@]}"; do printf ' %s pages | %s drawn (ms) | %s render (ms) |' "$label" "$label" "$label"; done
+    if [ "${#LABELS[@]}" -gt 1 ]; then printf ' Drawn, %s against %s |' "${LABELS[-1]}" "${LABELS[0]}"; fi
+    printf '\n| --- |'
+    for _ in "${LABELS[@]}"; do printf ' ---: | ---: | ---: |'; done
+    if [ "${#LABELS[@]}" -gt 1 ]; then printf ' ---: |'; fi
+    printf '\n'
+    declare -A SUM_DRAWN=() SUM_RENDER=()
+    for doc in "${OPEN_DOCS[@]}"; do
+      printf '| %s |' "$doc"
+      drawn_values=()
+      for label in "${LABELS[@]}"; do
+        d=$(median <<<"${OPEN_DRAWN[$label|$doc]:-}")
+        r=$(median <<<"${OPEN_RENDER[$label|$doc]:-}")
+        drawn_values+=("$d")
+        SUM_DRAWN[$label]=$(plus "${SUM_DRAWN[$label]:-0}" "$d")
+        SUM_RENDER[$label]=$(plus "${SUM_RENDER[$label]:-0}" "$r")
+        printf ' %s | %s | %s |' "${OPEN_PAGES[$label|$doc]:-NA}" "$d" "$r"
+      done
+      if [ "${#LABELS[@]}" -gt 1 ]; then printf ' %s |' "$(percent "${drawn_values[0]}" "${drawn_values[-1]}")"; fi
+      printf '\n'
+    done
+    printf '| **All %s documents** |' "${#OPEN_DOCS[@]}"
+    sums=()
+    for label in "${LABELS[@]}"; do
+      sums+=("${SUM_DRAWN[$label]}")
+      printf ' | **%s** | **%s** |' "${SUM_DRAWN[$label]}" "${SUM_RENDER[$label]}"
+    done
+    if [ "${#LABELS[@]}" -gt 1 ]; then printf ' **%s** |' "$(percent "${sums[0]}" "${sums[-1]}")"; fi
+    printf '\n'
   fi
   echo
   echo "Empty app on the same emulator: $EMPTY_FIRST ms to first frame (median of $STARTS)."
