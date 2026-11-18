@@ -115,6 +115,15 @@ Pull requests, in order. Each one updates this file when it merges.
   either build (the two-column paper: 204 to 843, 804 to 248, 864 to 860
   ms). The Strict files render 10 to 30 ms slower, as they now get their
   styles.
+- #31: the release workflow records a build provenance attestation for
+  the release APK and bundle (actions/attest-build-provenance v4.2.2,
+  pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8), after the signer
+  check and the hashes and before the files are attached; the job has
+  `id-token: write` and `attestations: write`. The README says how to
+  check a download with `gh attestation verify`. `ReleaseWorkflowTest`
+  reads `release.yml`; the repository had no workflow checks before. The
+  workflow itself runs only for a tag, so its first run is the 0.3.0
+  release.
 - #32: no text cut off at the fit zoom. The reader splits pages at 100%
   and gives each section of a split page the height it was measured at;
   drawn smaller, a line or table row can take more room, and the last line
@@ -293,7 +302,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: step 5, build provenance attestations (#31).
+- Round 0.3.0: step 6, the version bump to 0.3.0.
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 

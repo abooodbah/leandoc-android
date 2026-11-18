@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Give the release job no OIDC token",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "      id-token: write\n",
+    "new": ""
+  },
+  {
+    "name": "Give the release job no attestation store",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "      attestations: write\n",
+    "new": ""
+  },
+  {
+    "name": "Use the attestation action by its tag",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2",
+    "new": "actions/attest-build-provenance@v4"
+  },
+  {
+    "name": "Attest the bundle only",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "            dist/LeanDoc-${{ steps.collect.outputs.version }}.apk\n",
+    "new": ""
+  },
+  {
+    "name": "Attest after the files are attached",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "      # Records that these exact files were built by this workflow from this\n      # tag, so a download can be checked with `gh attestation verify`.\n      - name: Attest build provenance of the release APK and bundle\n        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2\n        with:\n          subject-path: |\n            dist/LeanDoc-${{ steps.collect.outputs.version }}.apk\n            dist/LeanDoc-${{ steps.collect.outputs.version }}.aab\n\n      - name: Attach to the release\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: gh release upload \"${{ inputs.tag }}\" dist/* --clobber\n\n",
+    "new": "      - name: Attach to the release\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: gh release upload \"${{ inputs.tag }}\" dist/* --clobber\n\n      # Records that these exact files were built by this workflow from this\n      # tag, so a download can be checked with `gh attestation verify`.\n      - name: Attest build provenance of the release APK and bundle\n        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2\n        with:\n          subject-path: |\n            dist/LeanDoc-${{ steps.collect.outputs.version }}.apk\n            dist/LeanDoc-${{ steps.collect.outputs.version }}.aab\n\n"
+  },
+  {
+    "name": "Do not record the version for the attestation",
+    "suite": "jvm",
+    "file": ".github/workflows/release.yml",
+    "old": "          echo \"version=$version\" >> \"$GITHUB_OUTPUT\"\n",
+    "new": ""
+  }
+]
