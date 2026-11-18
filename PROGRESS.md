@@ -2,6 +2,79 @@
 
 Updated with every merge. The next session starts here.
 
+## Round 0.3.0 (November 2026)
+
+The request: bring LeanDoc for Android in line with LeanDoc desktop 0.3.2,
+add build provenance attestations to the release workflow, and release
+0.3.0. The reader and core come from desktop tag v0.3.2 through
+`scripts/update-reader-assets.sh`.
+
+### Desktop changes since Android 0.2.0
+
+Android 0.2.0 carries the reader from desktop main a5c1a73. Desktop 0.2.0
+(tag v0.2.0, released 2026-11-06) has the same reader; only a timing record
+(#34) came between. Desktop releases after 2026-11-06: 0.3.0 and 0.3.1
+(2026-11-15) and 0.3.2 (2026-11-16). Desktop main after v0.3.2 adds build
+provenance attestations (#46). Between a5c1a73 and v0.3.2 the desktop
+changed `assets/reader.js`, `fixups.js` and `reader.css` only: `src/core/`,
+`third_party/`, the core tests and `tests/fixtures/` are unchanged.
+
+| Desktop change | Release | On a phone | Plan |
+| --- | --- | --- | --- |
+| Tables, figures and text boxes that Word floats at the top or foot of a page (wrapped top and bottom) are placed there, across the columns, and text no longer runs over them | 0.3.0 | Yes | Port; emulator tests at phone width |
+| Two-column papers lay out in two columns; references keep two columns and a hanging indent | 0.3.0 | Yes | Port; emulator tests at phone width |
+| Tab stops sized by the reader: contents pages keep dot leaders and right-aligned page numbers | 0.3.0 | Yes | Port; emulator test |
+| Numbered headings take Word's indents and stops; centred labels | 0.3.0 | Yes | Port |
+| A section without its own header takes the previous one; page number size and place | 0.3.0 | Yes | Port |
+| A footnote with the author's own mark shows that mark | 0.3.0 | Yes | Port |
+| An equation wider than its column wraps inside the column | 0.3.0 | Yes | Port |
+| A page that starts inside a word ends with a hyphen | 0.3.0 | Yes | Port |
+| Small capitals at Word's size, in the run's own font | 0.3.0 | Yes | Port |
+| Strict OOXML files keep their styles, lists, notes and tab stops | 0.3.0 | Yes | Port; `kinds/strict.docx` is already a fixture |
+| Some documents open more slowly (two-column papers 6 to 11%, Strict files 18% on the desktop) | 0.3.0 | Measure | Open time on the emulator for main and the branch, with the fixtures and the 300-page document, in the port's pull request |
+| Fewer near-empty extra pages, also across a section boundary | 0.3.1 | Yes | Port |
+| The Microsoft Store lists the app as "LeanDoc Word Viewer" | 0.3.2 | No | Skipped: the Android app keeps its name, package id and launcher label. The Play listing is the maintainer's |
+| Store screenshots, the "open .docx without Word" site page, winget and Store manifests, AppStream metadata | 0.3.0 to 0.3.2 | No | Skipped: desktop packaging and site |
+| Build provenance attestations for release files (#46) | main after 0.3.2 | Yes, for the release workflow | Own pull request: `release.yml` and a README line |
+
+### Plan
+
+Pull requests, in order. Each one updates this file when it merges.
+
+1. This plan.
+2. The desktop's reader test documents as fixtures: the documents the
+   desktop's reader tests build at test time (`tests/reader/make-*.mjs`)
+   for floating boxes, two-column sections, wide tables and a contents line
+   with dot leaders, written by `scripts/update-reader-assets.sh`, so the
+   emulator tests and the budgets job open the same files as the desktop
+   tests. The repository's own fixtures have no two-column page and no
+   floating table.
+3. The budgets job times opening each of these documents and the
+   repository's feature fixtures, for main and the branch, next to the
+   300-page document it already times.
+4. No text cut off at the fit zoom. In a headless Chromium check at phone
+   widths, the desktop's two-column paper loses the last line of a column
+   past the page's edge at 36%, 43% and 66% zoom on main: pages are split at
+   100% and drawn smaller, where lines take a little more room. With the
+   v0.3.2 reader the page clips at its edge, and a long table loses its last
+   row at 31% to 66%. Failing emulator tests first, then the fix.
+5. The reader and core from desktop v0.3.2 through
+   `scripts/update-reader-assets.sh`. Failing emulator tests first, at the
+   phone's width and fit zoom: a floating table at the top of its page
+   across both columns with no text under it, two columns kept, a contents
+   line with its dot leader, wide tables inside the page, each after
+   opening through ACTION_VIEW with a content:// URI, scrolling and
+   rotating. Then the port. The open-time numbers for main and the branch go
+   in the pull request; over 10% slower needs a reason and, where
+   reasonable, a fix.
+6. Build provenance attestations in `release.yml` (actions/attest-build-provenance
+   v4.2.2, pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8) and the README
+   line on `gh attestation verify`.
+7. Version 0.3.0 (code 5): `CHANGELOG.md`, `README.md`, fastlane changelog
+   `5.txt`, release notes in `docs/releases/v0.3.0.md`. The tag, the GitHub
+   release and the Play bundle run are left to the maintainer: this session
+   cannot push tags.
+
 ## Round 0.2.0 (November 2026)
 
 The request: make LeanDoc for Android look and work like the other Lean
@@ -167,9 +240,9 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.2.0: merged up to the version bump. The tag v0.2.0, the
-  pre-release and the two release workflows are run from the maintainer's
-  PC; this session cannot create tags.
+- Round 0.3.0: plan above, step 1.
+- Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
+  maintainer's PC.
 
 ## Remaining
 
