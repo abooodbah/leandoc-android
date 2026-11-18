@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Leave a section at the height it was measured at",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "        article.style.height = height + Math.ceil(over / (columns > 1 ? columns : 1)) + 1 + \"px\";\n",
+    "new": ""
+  },
+  {
+    "name": "Never see text past a section's edge",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "if (rect.width > 0 && rect.left >= box.right - 0.5) {",
+    "new": "if (rect.width > 0 && rect.left >= box.right + 100000) {"
+  },
+  {
+    "name": "Do not look at a page that comes on screen",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "              if (observer === current) {\n                check(entry.target);\n              }\n",
+    "new": "              if (observer === current) {\n              }\n"
+  },
+  {
+    "name": "Look at the pages again only after a render, not after a zoom",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "attributeFilter: [\"data-render-state\", \"data-zoom\"] });\n  }\n\n  // On a phone",
+    "new": "attributeFilter: [\"data-render-state\"] });\n  }\n\n  // On a phone"
+  },
+  {
+    "name": "Keep a grown section's height after a change of zoom",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "          article.style.height = article.getAttribute(GROWN);\n",
+    "new": ""
+  },
+  {
+    "name": "Grow a section once only",
+    "suite": "device",
+    "tests": "TextOnThePageTest",
+    "file": "app/src/main/assets/reader/android-host.js",
+    "old": "    var MAX_STEPS = 12;",
+    "new": "    var MAX_STEPS = 1;"
+  }
+]
