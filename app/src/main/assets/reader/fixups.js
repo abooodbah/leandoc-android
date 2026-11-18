@@ -885,6 +885,63 @@
     }
   }
 
+  // Footnotes whose reference says a mark of the author's own follows it
+  // (w:customMarkFollows): Word prints that mark, not a number, before the
+  // note and in it. The reader hides the number docx-preview gives them
+  // (reader.js hideCustomMarks).
+  function customMarkNotes(xmlBody) {
+    var ids = [];
+    function take(child) {
+      var follows = getAttr(child, "customMarkFollows");
+      var id = getAttr(child, "id");
+      if (follows !== null && !/^(0|false|off)$/i.test(follows) && id !== null && ids.indexOf(id) < 0) {
+        ids.push(id);
+      }
+    }
+    // The parser's own index: walking a 1,000-page body took 13 ms.
+    if (xmlBody && xmlBody.getElementsByTagNameNS) {
+      Array.prototype.forEach.call(xmlBody.getElementsByTagNameNS("*", "footnoteReference"), take);
+      return ids;
+    }
+    (function visit(element) {
+      var children = (element && element.children) || [];
+      for (var index = 0; index < children.length; index += 1) {
+        var child = children[index];
+        if (child.localName === "footnoteReference") {
+          take(child);
+        } else {
+          visit(child);
+        }
+      }
+    }(xmlBody));
+    return ids;
+  }
+
+  // Notes whose text carries the note's own reference mark (w:footnoteRef).
+  // Word prints the note's number there even when the reference in the text
+  // says a mark of the author's own follows: a heading whose reference had
+  // no mark after it showed nothing in the text and "1" in the note.
+  function notesWithReferenceMark(notesRoot) {
+    var ids = [];
+    Array.prototype.forEach.call((notesRoot && notesRoot.children) || [], function (note) {
+      var id = getAttr(note, "id");
+      if (id === null) {
+        return;
+      }
+      (function visit(element) {
+        var children = (element && element.children) || [];
+        for (var index = 0; index < children.length && ids[ids.length - 1] !== id; index += 1) {
+          if (children[index].localName === "footnoteRef") {
+            ids.push(id);
+          } else {
+            visit(children[index]);
+          }
+        }
+      }(note));
+    });
+    return ids;
+  }
+
   function markNotes(part) {
     (part && Array.isArray(part.notes) ? part.notes : []).forEach(function (note) {
       if (note && note.id !== undefined && Array.isArray(note.children)) {
@@ -917,6 +974,17 @@
     return runs;
   }
 
+  // Word sets an updated field's result in the format of the field code's
+  // first character, unless the code asks to keep the result's own
+  // (\* MERGEFORMAT or \* CHARFORMAT). A header's PAGE result saved at 7 pt
+  // after a 10 pt code printed at 10 pt in Word and at 7 pt here.
+  var FIELD_KEEPS_FORMAT = /\\\*\s*(MERGEFORMAT|CHARFORMAT)/i;
+  function takeCodeFormat(run, code) {
+    run.cssStyle = Object.assign({}, code.cssStyle || {});
+    run.styleName = code.styleName;
+    run.verticalAlign = code.verticalAlign;
+  }
+
   function markPageFields(paragraph, stats) {
     var fields = [];
     paragraphRuns(paragraph).forEach(function (run) {
@@ -924,13 +992,14 @@
       if (run.fieldRun) {
         children.forEach(function (child) {
           if (child.type === "complexField" && child.charType === "begin") {
-            fields.push({ instruction: "", result: false, marked: false });
+            fields.push({ instruction: "", result: false, marked: false, code: null });
           } else if (child.type === "complexField" && child.charType === "separate" && fields.length) {
             fields[fields.length - 1].result = true;
           } else if (child.type === "complexField" && child.charType === "end") {
             fields.pop();
           } else if (child.type === "instruction" && fields.length) {
             fields[fields.length - 1].instruction += child.text || "";
+            fields[fields.length - 1].code = fields[fields.length - 1].code || run;
           }
         });
         return;
@@ -939,6 +1008,9 @@
       var keyword = field && field.result ? pageFieldKeyword(field.instruction) : "";
       if (!keyword) {
         return;
+      }
+      if (field.code && !FIELD_KEEPS_FORMAT.test(field.instruction)) {
+        takeCodeFormat(run, field.code);
       }
       children.forEach(function (child) {
         if (child.type !== "text") {
@@ -1100,6 +1172,572 @@
       });
     });
     return reserved;
+  }
+
+  // A VML text box that Word places on the page with text above and below
+  // it (w10:wrap type="topAndBottom"), as an IEEE paper places a figure or
+  // table across both columns at the top of a page. docx-preview drew it as
+  // an absolutely positioned SVG at its anchor's line: in a two-column paper
+  // the tables printed over the text of both columns, and their cells took
+  // the anchoring heading's small capitals. Such a box becomes a plain block
+  // that the page view places at the top or the foot of the page that holds
+  // its anchor, across every column (reader.js placeFloats), and the reading
+  // view shows before its anchor's paragraph.
+  var FLOAT_CLASS = "ld-float";
+
+  function vmlStyleValue(style, name) {
+    var match = new RegExp("(?:^|;)\\s*" + name + "\\s*:\\s*([^;]*)", "i").exec(style || "");
+    return match ? match[1].trim().toLowerCase() : "";
+  }
+
+  // v:textbox inset: left, top, right, bottom. A bare number is in EMU; a
+  // missing value keeps VML's default of 0.1 in at the sides and 0.05 in at
+  // the top and bottom.
+  function vmlPoints(value, fallback) {
+    var match = /^\s*(-?\d*\.?\d+)\s*(pt|in|px|cm|mm|pc)?\s*$/i.exec(value || "");
+    if (!match) {
+      return fallback;
+    }
+    return match[2] ? parseFloat(match[1]) * VML_UNITS[match[2].toLowerCase()] : parseFloat(match[1]) / 12700;
+  }
+
+  function vmlInset(value) {
+    var inset = [7.2, 3.6, 7.2, 3.6];
+    String(value || "").split(",").forEach(function (part, index) {
+      if (index < 4) {
+        inset[index] = vmlPoints(part, inset[index]);
+      }
+    });
+    return inset;
+  }
+
+  var VML_COLOR = /^(#[0-9a-f]{6}|#[0-9a-f]{3}|black|white|red|green|blue|yellow|gray|silver)$/i;
+
+  function vmlColor(value, fallback) {
+    var first = String(value || "").trim().split(/\s+/)[0];
+    return VML_COLOR.test(first) ? first.toLowerCase() : fallback;
+  }
+
+  function isOff(value) {
+    return /^(f|false|0|off)$/i.test(String(value || ""));
+  }
+
+  // How a VML shape floats, or null when it is not a text box Word wraps
+  // top and bottom. "top" and "bottom" boxes are positioned against the
+  // page or its margins; any other box sits in the text at its anchor.
+  function floatPlacement(shape) {
+    var style = shape ? getAttr(shape, "style") || "" : "";
+    if (!/position\s*:\s*absolute/i.test(style)) {
+      return null;
+    }
+    var wrap = childNamed(shape, "wrap");
+    var textbox = childNamed(shape, "textbox");
+    if (!wrap || getAttr(wrap, "type") !== "topAndBottom" || !textbox || !childNamed(textbox, "txbxContent")) {
+      return null;
+    }
+    var width = vmlLength(style, "width");
+    if (!(width > 0)) {
+      return null;
+    }
+    var relative = vmlStyleValue(style, "mso-position-vertical-relative") || "text";
+    var vertical = vmlStyleValue(style, "mso-position-vertical");
+    var place = /^(margin|page|top-margin-area|bottom-margin-area)$/.test(relative)
+      ? (vertical === "bottom" || relative === "bottom-margin-area" ? "bottom" : "top")
+      : "inline";
+    var inset = vmlInset(getAttr(textbox, "inset"));
+    var css = {
+      width: width + "pt",
+      "box-sizing": "border-box",
+      padding: inset[1] + "pt " + inset[2] + "pt " + inset[3] + "pt " + inset[0] + "pt",
+      "margin-top": vmlLength(style, "mso-wrap-distance-top") + "pt",
+      "margin-bottom": vmlLength(style, "mso-wrap-distance-bottom") + "pt"
+    };
+    // A box that fits its text (mso-fit-shape-to-text) takes the height of
+    // its text: Word refits it when it lays the page out, and a box of two
+    // tables saved at 422.8 pt stood 372.9 pt tall in Word, 50 pt less.
+    // Any other box keeps the height Word saved and grows if the reader's
+    // text runs taller.
+    if (!/mso-fit-shape-to-text\s*:\s*t/i.test(getAttr(textbox, "style") || "")) {
+      css["min-height"] = vmlLength(style, "height") + "pt";
+    }
+    var horizontal = vmlStyleValue(style, "mso-position-horizontal");
+    if (horizontal === "center") {
+      css["margin-left"] = "auto";
+      css["margin-right"] = "auto";
+    } else if (horizontal === "right" || horizontal === "outside") {
+      css["margin-left"] = "auto";
+      css["margin-right"] = "0pt";
+    } else if (horizontal === "left" || horizontal === "inside") {
+      css["margin-left"] = "0pt";
+    } else {
+      css["margin-left"] = vmlLength(style, "margin-left") + "pt";
+    }
+    // A shape is stroked and filled unless it says otherwise: a 0.75 pt
+    // black line and a white fill.
+    var stroke = childNamed(shape, "stroke");
+    if (!isOff(getAttr(shape, "stroked")) && !(stroke && isOff(getAttr(stroke, "on")))) {
+      css.border = vmlPoints(getAttr(shape, "strokeweight"), 0.75) + "pt solid " +
+        vmlColor(getAttr(shape, "strokecolor"), "black");
+    }
+    var fill = childNamed(shape, "fill");
+    if (!isOff(getAttr(shape, "filled")) && !(fill && isOff(getAttr(fill, "on")))) {
+      css["background-color"] = vmlColor(getAttr(shape, "fillcolor"), "white");
+    }
+    return { place: place, css: css };
+  }
+
+  function vmlShape(pict) {
+    var children = (pict && pict.children) || [];
+    for (var index = 0; index < children.length; index += 1) {
+      if (/^(shape|rect|roundrect)$/.test(children[index].localName)) {
+        return children[index];
+      }
+    }
+    return null;
+  }
+
+  function textBoxContent(picture) {
+    var content = null;
+    eachModelElement(picture.children || [], function (element) {
+      if (!content && element.tagName === "foreignObject" && Array.isArray(element.children)) {
+        content = element.children;
+      }
+    });
+    return content;
+  }
+
+  function floatTextBoxes(modelBody, xmlBody) {
+    // A body with no VML picture has no text box to float; pairing its
+    // paragraphs took 6 ms on a 1,000-page report.
+    if (xmlBody && xmlBody.getElementsByTagNameNS && !xmlBody.getElementsByTagNameNS("*", "pict").length) {
+      return 0;
+    }
+    var modelParagraphs = [];
+    var xmlParagraphs = [];
+    modelBlocks(modelBody ? modelBody.children : [], modelParagraphs, []);
+    if (xmlBody) {
+      xmlBlocks(xmlBody, false, xmlParagraphs, []);
+    }
+    if (!xmlBody || xmlParagraphs.length !== modelParagraphs.length) {
+      return 0;
+    }
+    var floated = 0;
+    modelParagraphs.forEach(function (paragraph, index) {
+      var pictures = [];
+      eachModelElement(paragraph.children || [], function (element) {
+        if (element.type === "vmlPicture") {
+          pictures.push(element);
+        }
+      });
+      if (!pictures.length) {
+        return;
+      }
+      var sources = paragraphPictures(xmlParagraphs[index], []);
+      if (sources.length !== pictures.length) {
+        return;
+      }
+      pictures.forEach(function (picture, position) {
+        var placement = floatPlacement(vmlShape(sources[position]));
+        var content = placement ? textBoxContent(picture) : null;
+        if (!content || !content.length) {
+          return;
+        }
+        picture.children = [{
+          type: "drawing",
+          className: FLOAT_CLASS + " " + FLOAT_CLASS + "-" + placement.place,
+          cssStyle: placement.css,
+          children: content
+        }];
+        floated += 1;
+      });
+    });
+    return floated;
+  }
+
+  // Word gives a section that names no header or footer of a kind the one
+  // of the section before it. docx-preview showed none, and a paper whose
+  // page numbers are in the first section's header lost them after page 1.
+  function inheritHeaderFooters(body) {
+    if (!body) {
+      return 0;
+    }
+    var sections = (body.children || []).filter(function (block) {
+      return block && block.type === "paragraph" && block.sectionProps;
+    }).map(function (block) {
+      return block.sectionProps;
+    });
+    if (body.props) {
+      sections.push(body.props);
+    }
+    var previous = { headerRefs: [], footerRefs: [] };
+    var inherited = 0;
+    sections.forEach(function (props) {
+      ["headerRefs", "footerRefs"].forEach(function (key) {
+        var own = (props[key] || []).filter(Boolean);
+        var refs = own.slice();
+        previous[key].forEach(function (ref) {
+          var named = own.some(function (mine) {
+            return (mine.type || "default") === (ref.type || "default");
+          });
+          if (!named) {
+            refs.push(ref);
+            inherited += 1;
+          }
+        });
+        if (refs.length !== own.length) {
+          props[key] = refs;
+        }
+        previous[key] = refs;
+      });
+    });
+    return inherited;
+  }
+
+  // Tabs. docx-preview set each tab's width half a second after it rendered,
+  // from its own rule: it counted the paragraph's indent twice and knew
+  // nothing of the stop Word makes at a hanging indent. The widths changed
+  // after the page view had split the pages, so the IEEE reference list of
+  // a paper ("[4]", a tab, then the text at the hanging indent) gained a
+  // wide gap after each number and ran into a third column past the page.
+  // Each tab becomes a span the reader sizes before it lays out the pages
+  // (reader.js setTabStops), and each paragraph with stops of its own lists
+  // them in a class: TAB_STOPS, then kind, position in twips and leader per
+  // stop, as in "ld-ts-r10280" or "ld-ts-l400_r9360o".
+  var TAB_CLASS = "ld-tab";
+  var TAB_STOPS = "ld-ts-";
+  var TAB_KINDS = { left: "l", start: "l", num: "l", right: "r", end: "r", center: "c", decimal: "d" };
+  var TAB_LEADERS = { dot: "o", middleDot: "m", hyphen: "h", underscore: "u", heavy: "u" };
+
+  function mergeTabStops(stops, tabs) {
+    (tabs || []).forEach(function (tab) {
+      var position = tab ? parseFloat(tab.position) : NaN;
+      if (!isFinite(position)) {
+        return;
+      }
+      var twips = Math.round(position * 20);
+      stops = stops.filter(function (stop) {
+        return stop.twips !== twips;
+      });
+      // A cleared stop stays listed ("x"), so that it also clears a stop
+      // of a layer below this one (a numbering level's).
+      var kind = tab.style === "clear" ? "x" : TAB_KINDS[tab.style || "left"];
+      if (kind) {
+        stops.push({ twips: twips, kind: kind, leader: TAB_LEADERS[tab.leader] || "" });
+      }
+    });
+    return stops;
+  }
+
+  // `upper`'s stops over `lower`'s: one at the same position replaces or
+  // clears the lower one.
+  function overlayTabStops(lower, upper) {
+    return lower.filter(function (stop) {
+      return !upper.some(function (over) {
+        return over.twips === stop.twips;
+      });
+    }).concat(upper);
+  }
+
+  function tabStopsToken(stops) {
+    stops = stops.filter(function (stop) {
+      return stop.kind !== "x";
+    });
+    return stops.length ? TAB_STOPS + stops.slice().sort(function (a, b) {
+      return a.twips - b.twips;
+    }).map(function (stop) {
+      return stop.kind + stop.twips + stop.leader;
+    }).join("_") : "";
+  }
+
+  function parseTabStops(className) {
+    var match = new RegExp("(?:^|\\s)" + TAB_STOPS + "(\\S+)").exec(className || "");
+    if (!match) {
+      return [];
+    }
+    return match[1].split("_").map(function (part) {
+      var stop = /^([lrcd])(-?\d+)([omhu]?)$/.exec(part);
+      return stop ? { kind: stop[1], position: parseInt(stop[2], 10) / 20, leader: stop[3] } : null;
+    }).filter(Boolean);
+  }
+
+  // The numbering levels whose label Word follows with a tab (w:suff is
+  // "tab" or absent), by "id:level", each with every model level it names.
+  function tabbedLevels(numberings) {
+    var levels = {};
+    (numberings || []).forEach(function (num) {
+      if (num && !num.bullet && typeof num.levelText === "string" && num.levelText !== "" &&
+          (num.suff === undefined || num.suff === "tab")) {
+        var key = num.id + ":" + num.level;
+        (levels[key] || (levels[key] = [])).push(num);
+      }
+    });
+    return levels;
+  }
+
+  // The tab stops each numbering level sets in its own w:pPr, by
+  // "numId:ilvl", as docx-preview's tabs ({ style, leader, position } in
+  // points). docx-preview keeps a level's indents but not its stops, and
+  // Word sends the label's tab to them: a heading numbered "I." had its
+  // text at the 36 pt default stop instead of the level's 28.8 pt.
+  function numberingTabs(part) {
+    var xml = part && part._xmlDocument;
+    var root = xml && (xml.documentElement || xml);
+    var result = {};
+    if (!root || !root.children) {
+      return result;
+    }
+    var abstracts = {};
+    var nums = [];
+    Array.prototype.forEach.call(root.children, function (child) {
+      if (child.localName === "abstractNum") {
+        abstracts[getAttr(child, "abstractNumId")] = child;
+      } else if (child.localName === "num") {
+        nums.push(child);
+      }
+    });
+    function levelStops(level) {
+      var props = level ? childNamed(level, "pPr") : null;
+      var tabs = props ? childNamed(props, "tabs") : null;
+      return Array.prototype.filter.call(tabs ? tabs.children : [], function (tab) {
+        return tab.localName === "tab";
+      }).map(function (tab) {
+        return { style: getAttr(tab, "val") || "left", leader: getAttr(tab, "leader") || "",
+          position: (parseFloat(getAttr(tab, "pos")) || 0) / 20 };
+      });
+    }
+    // The label's alignment (w:lvlJc), which docx-preview drops, rides on
+    // the list as "jc".
+    function levelInfo(level) {
+      var stops = levelStops(level);
+      var jc = childNamed(level, "lvlJc");
+      stops.jc = jc ? getAttr(jc, "val") || "" : "";
+      return stops;
+    }
+    nums.forEach(function (num) {
+      var id = getAttr(num, "numId");
+      var abstractId = childNamed(num, "abstractNumId");
+      var abstract = abstractId ? abstracts[getAttr(abstractId, "val")] : null;
+      Array.prototype.forEach.call(abstract ? abstract.children : [], function (level) {
+        if (level.localName === "lvl") {
+          result[id + ":" + (getAttr(level, "ilvl") || "0")] = levelInfo(level);
+        }
+      });
+      // A w:lvlOverride with a w:lvl of its own replaces the level.
+      Array.prototype.forEach.call(num.children, function (override) {
+        var level = override.localName === "lvlOverride" ? childNamed(override, "lvl") : null;
+        if (level) {
+          result[id + ":" + (getAttr(override, "ilvl") || "0")] = levelInfo(level);
+        }
+      });
+    });
+    return result;
+  }
+
+  var INDENT_KEYS = ["text-indent", "margin-inline-start", "margin-inline-end", "margin-left", "margin-right"];
+  var LABEL_JC = { center: "ld-lj-center", right: "ld-lj-right", end: "ld-lj-right" };
+
+  function markTabs(roots, styles, numberings, levelTabs) {
+    var levels = tabbedLevels(numberings);
+    levelTabs = levelTabs || {};
+    var byId = {};
+    (styles || []).forEach(function (style) {
+      if (style && style.id && style.target === "p") {
+        byId[style.id] = style;
+      }
+    });
+    var chains = {};
+    function styleStops(id) {
+      if (!id || !byId[id]) {
+        return [];
+      }
+      if (!chains[id]) {
+        chains[id] = [];
+        var style = byId[id];
+        var base = style.basedOn && style.basedOn !== id ? styleStops(style.basedOn) : [];
+        chains[id] = mergeTabStops(base, style.paragraphProps && style.paragraphProps.tabs);
+      }
+      return chains[id];
+    }
+    var marked = 0;
+    // A paragraph's own runs, not those of a text box paragraph inside it.
+    function replaceTabs(parent) {
+      var found = false;
+      (parent.children || []).forEach(function (child, index) {
+        if (!child || typeof child !== "object") {
+          return;
+        }
+        if (child.type === "tab") {
+          parent.children[index] = { type: "run", className: TAB_CLASS, children: [{ type: "text", text: "\u2003" }] };
+          found = true;
+          marked += 1;
+        } else if (!/^(paragraph|table|drawing|vmlPicture|vmlElement)$/.test(child.type || "")) {
+          found = replaceTabs(child) || found;
+        }
+      });
+      return found;
+    }
+    // docx-preview prints a numbering label before the paragraph's text,
+    // with the tab after it as a space, so the text started right after the
+    // label: Word starts it at the next stop, mostly the hanging indent. The
+    // tab becomes the paragraph's first, which the reader sizes like any
+    // other. A heading numbered "A." whose text starts with a tab of its own
+    // put that text one stop short of Word's, 22 pt to the left.
+    var numbered = [];
+    // A style's w:numPr may name no level; docx-preview later takes the one
+    // whose w:pStyle names the style, as Word does.
+    var styleLevels = {};
+    (numberings || []).forEach(function (num) {
+      if (num && num.pStyleName) {
+        styleLevels[num.id + ":" + num.pStyleName] = num.level;
+      }
+    });
+    function numberingKey(element) {
+      if (element.numbering) {
+        return element.numbering.id + ":" + element.numbering.level;
+      }
+      var style = byId[element.styleName];
+      var numbering = style && style.paragraphProps && style.paragraphProps.numbering;
+      if (!numbering) {
+        return "";
+      }
+      var level = numbering.level;
+      if (level === undefined || level === null) {
+        level = styleLevels[numbering.id + ":" + element.styleName];
+      }
+      return numbering.id + ":" + level;
+    }
+    // A style that numbers its paragraphs keeps its own indents: Word lets
+    // the level's indents (docx-preview's later p.docx-num-* rule) win only
+    // over the styles below it. A heading style with w:ind w:firstLine="0"
+    // over a level's 10.8 pt first line put the label 10.8 pt right of Word's.
+    function linkedIndents(id) {
+      var found = {};
+      for (var depth = 0; id && byId[id] && depth < 20; depth += 1) {
+        var style = byId[id];
+        (style.styles || []).forEach(function (sub) {
+          if (sub && sub.target === "p" && sub.values) {
+            INDENT_KEYS.forEach(function (name) {
+              if (sub.values[name] !== undefined && found[name] === undefined) {
+                found[name] = sub.values[name];
+              }
+            });
+          }
+        });
+        if (style.paragraphProps && style.paragraphProps.numbering) {
+          return found;
+        }
+        id = style.basedOn;
+      }
+      return {};
+    }
+    function cancelsStyleNumbering(element) {
+      if (!element.numbering || element.numbering.id !== "0") {
+        return false;
+      }
+      var style = byId[element.styleName];
+      var numbering = style && style.paragraphProps && style.paragraphProps.numbering;
+      return !!(numbering && numbering.id && numbering.id !== "0");
+    }
+    // Whether a paragraph's text starts with a tab of its own.
+    function startsWithTab(parent) {
+      var children = parent.children || [];
+      for (var index = 0; index < children.length; index += 1) {
+        var child = children[index];
+        if (!child || typeof child !== "object" || /^(paragraph|table)$/.test(child.type || "")) {
+          continue;
+        }
+        if (child.type === "tab") {
+          return true;
+        }
+        if (child.type === "text" ? /\S/.test(child.text || "") : /^(drawing|vmlPicture|image|symbol)$/.test(child.type || "")) {
+          return false;
+        }
+        var found = startsWithTab(child);
+        if (found !== null) {
+          return found;
+        }
+      }
+      return null;
+    }
+    // Only a level with a paragraph whose text starts with a tab of its own
+    // gets the label's tab, on each of its paragraphs (the label's suffix
+    // belongs to the level). A plain numbered list keeps docx-preview's
+    // label: a tab run per item cost a 300-page report about 4 MiB.
+    // A level whose label Word centres or right-aligns gets the tab too: the
+    // reader shifts that label as an inline block (alignLabels), where the
+    // tab and space after "I." collapsed, and "I.Introduction" lost the
+    // 7.8 pt Word leaves (the text goes to the next stop past the label).
+    var ownTab = {};
+    eachModelElement(roots, function (element) {
+      if (element.type === "paragraph") {
+        var key = numberingKey(element);
+        var aligned = key && levelTabs[key] && LABEL_JC[levelTabs[key].jc];
+        if (key && levels[key] && (aligned || startsWithTab(element))) {
+          ownTab[key] = true;
+        }
+      }
+    });
+    eachModelElement(roots, function (element) {
+      if (element.type !== "paragraph") {
+        return;
+      }
+      var key = numberingKey(element);
+      if (cancelsStyleNumbering(element)) {
+        // w:numId 0 under a style that numbers: Word drops the style's left
+        // and first-line indents with its numbering (Word 16, COM: both 0),
+        // and a leading tab goes to the first stop. The paragraph's own
+        // indents still apply: a 0 margin-left after the paragraph's own
+        // margin-inline-start of 14.4 pt overrode it, and its text started
+        // 21.6 pt left of Word's.
+        var css = element.cssStyle = element.cssStyle || {};
+        if (css["text-indent"] === undefined) {
+          css["text-indent"] = "0pt";
+        }
+        if (css["margin-inline-start"] === undefined && css["margin-left"] === undefined) {
+          css["margin-inline-start"] = "0pt";
+        }
+      } else if (key && !element.numbering) {
+        var indents = linkedIndents(element.styleName);
+        // The paragraph's own indents still win, each on its own.
+        Object.keys(indents).forEach(function (name) {
+          element.cssStyle = element.cssStyle || {};
+          if (element.cssStyle[name] === undefined) {
+            element.cssStyle[name] = indents[name];
+          }
+        });
+      }
+      var info = key && levelTabs[key];
+      if (info && LABEL_JC[info.jc] && levels[key]) {
+        addClass(element, LABEL_JC[info.jc]);
+      }
+      var tabbed = key && ownTab[key] ? levels[key] || null : null;
+      if (tabbed) {
+        element.children = [{ type: "run", children: [{ type: "tab" }] }].concat(element.children || []);
+        tabbed.forEach(function (level) {
+          if (numbered.indexOf(level) < 0) {
+            numbered.push(level);
+          }
+        });
+      }
+      if (!replaceTabs(element)) {
+        return;
+      }
+      // A level's stops rank below the style's when the style numbers the
+      // paragraph (a heading style's w:tab w:val="clear" removes one), and
+      // above them when the paragraph numbers itself.
+      var ownLevel = mergeTabStops([], key && levelTabs[key] ? levelTabs[key] : []);
+      var styled = styleStops(element.styleName);
+      var stops = mergeTabStops(element.numbering ? overlayTabStops(styled, ownLevel) : overlayTabStops(ownLevel, styled),
+        element.tabs);
+      var token = tabStopsToken(stops);
+      if (token) {
+        addClass(element, token);
+      }
+    });
+    numbered.forEach(function (level) {
+      level.suff = "nothing";
+    });
+    return marked;
   }
 
   // A section that sets no page size or margins (pandoc writes neither)
@@ -1765,7 +2403,7 @@
       noteReferences: 0, pageFields: 0, autoHyphenation: false, sectionBreakParagraphs: 0, fittedTables: 0,
       fixedTables: 0, markSizes: 0, contextualSpacing: 0, savedPageStarts: 0, droppedPageStarts: 0,
       widowControlOff: 0, keepLines: 0, keepNext: 0, defaultPageSetups: 0, reservedPictures: 0,
-      fontStandIns: 0 };
+      fontStandIns: 0, floats: 0, inheritedHeaders: 0, tabs: 0, defaultTabStop: 36, customMarkNotes: [], numberedCustomMarkNotes: [] };
     if (!doc) {
       return stats;
     }
@@ -1972,14 +2610,28 @@
     stats.widowControlOff = rules.widowOff;
     stats.keepLines = rules.keepLines;
     stats.keepNext = rules.keepNext;
+    stats.floats = floatTextBoxes(modelBody, xmlBody);
     stats.reservedPictures = reserveVmlSpace(modelBody, xmlBody);
     var saved = markSavedPageStarts(modelBody, styles);
     stats.savedPageStarts = saved.marked;
     stats.droppedPageStarts = saved.dropped;
     markNotes(doc.footnotesPart);
+    stats.customMarkNotes = customMarkNotes(xmlBody);
+    if (stats.customMarkNotes.length) {
+      var referenced = notesWithReferenceMark(partRoot(doc.footnotesPart));
+      stats.numberedCustomMarkNotes = stats.customMarkNotes.filter(function (id) {
+        return referenced.indexOf(id) >= 0;
+      });
+    }
     stats.sectionBreakParagraphs = hideSectionBreakParagraphs(doc.documentPart && doc.documentPart.body);
     stats.defaultPageSetups = fillDocumentPageSetup(doc.documentPart && doc.documentPart.body);
+    stats.inheritedHeaders = inheritHeaderFooters(doc.documentPart && doc.documentPart.body);
     stats.titleSections = markTitleSections(doc.documentPart && doc.documentPart.body);
+    stats.tabs = markTabs(roots, styles, numberings, numberingTabs(doc.numberingPart));
+    var interval = parseFloat(doc.settingsPart && doc.settingsPart.settings && doc.settingsPart.settings.defaultTabStop);
+    if (interval > 0) {
+      stats.defaultTabStop = interval;
+    }
 
     // keepOrigin kept the XML only for the pairing above.
     (doc.parts || []).forEach(function (part) {
@@ -2010,6 +2662,122 @@
     return -Math.round(JUSTIFY_SPACE_SHRINK * spaceWidth * 1000) / 1000;
   }
 
+  // Strict OOXML (Word's "Strict Open XML Document") names its parts and
+  // elements in the purl.oclc.org namespaces and writes lengths with units
+  // ("14.40pt"). docx-preview reads only the transitional names: it found no
+  // styles, numbering or notes part in such a document and dropped every
+  // paragraph and run property, so a paper saved as Strict lost its body
+  // style's first-line indent, spacing, justification and tab stops. Its
+  // parts are rewritten to the transitional form as the package opens.
+  var STRICT_NAMESPACES = [
+    ["http://purl.oclc.org/ooxml/officeDocument/relationships/extendedProperties",
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties"],
+    ["http://purl.oclc.org/ooxml/officeDocument/relationships/customProperties",
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties"],
+    ["http://purl.oclc.org/ooxml/officeDocument/relationships",
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships"],
+    ["http://purl.oclc.org/ooxml/officeDocument/extendedProperties",
+      "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"],
+    ["http://purl.oclc.org/ooxml/officeDocument/customProperties",
+      "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"],
+    ["http://purl.oclc.org/ooxml/officeDocument/docPropsVTypes",
+      "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"],
+    ["http://purl.oclc.org/ooxml/officeDocument/sharedTypes",
+      "http://schemas.openxmlformats.org/officeDocument/2006/sharedTypes"],
+    ["http://purl.oclc.org/ooxml/officeDocument/math",
+      "http://schemas.openxmlformats.org/officeDocument/2006/math"],
+    ["http://purl.oclc.org/ooxml/wordprocessingml/main",
+      "http://schemas.openxmlformats.org/wordprocessingml/2006/main"],
+    ["http://purl.oclc.org/ooxml/drawingml/",
+      "http://schemas.openxmlformats.org/drawingml/2006/"]
+  ];
+  var STRICT_MARK = "http://purl.oclc.org/ooxml/";
+  var POINTS_PER_UNIT = { pt: 1, pc: 12, pi: 12, "in": 72, cm: 72 / 2.54, mm: 72 / 25.4 };
+  // Strict lengths in the units transitional readers expect: half points for
+  // font sizes and run positions, eighths of a point for a border's width,
+  // points for a border's spacing, twips for everything else.
+  var HALF_POINT_VALUES = { sz: true, szCs: true, kern: true, position: true };
+
+  function transitionalLength(element, attribute, points) {
+    if (attribute === "val" && HALF_POINT_VALUES[element]) {
+      return Math.round(points * 2);
+    }
+    if (attribute === "sz") {
+      return Math.round(points * 8);
+    }
+    if (attribute === "space" && element !== "cols") {
+      return Math.round(points);
+    }
+    return Math.round(points * 20);
+  }
+
+  // A Strict namespace in a tag's attribute values (namespace declarations,
+  // relationship types, a drawing's uri) in its transitional form. Text
+  // between tags, and a relationship's Target, are kept as written: a
+  // document whose text spelled a Strict namespace showed the transitional
+  // one.
+  function transitionalNamespaces(tag) {
+    return tag.replace(/(\s([\w:.-]+)\s*=\s*)("[^"]*"|'[^']*')/g, function (whole, before, name, value) {
+      if (name === "Target") {
+        return whole;
+      }
+      STRICT_NAMESPACES.forEach(function (pair) {
+        value = value.split(pair[0]).join(pair[1]);
+      });
+      return before + value;
+    });
+  }
+
+  function transitionalXml(text) {
+    if (typeof text !== "string" || text.indexOf(STRICT_MARK) < 0) {
+      return text;
+    }
+    text = text.replace(/<[^<>]*purl\.oclc\.org[^<>]*>/g, transitionalNamespaces);
+    return text.replace(/<w:([A-Za-z]+)(\s[^<>]*?)(\/?)>/g, function (tag, element, attributes, close) {
+      if (!/="-?\d*\.?\d+(?:pt|pc|pi|in|cm|mm|%)"/.test(attributes)) {
+        return tag;
+      }
+      attributes = attributes.replace(/(\sw:)([A-Za-z]+)="(-?\d*\.?\d+)(pt|pc|pi|in|cm|mm|%)"/g,
+        function (whole, prefix, attribute, number, unit) {
+          var value = parseFloat(number);
+          if (unit === "%") {
+            // Table and cell widths count fiftieths of a percent; a text
+            // scale counts whole percent.
+            return prefix + attribute + '="' + Math.round(attribute === "w" ? value * 50 : value) + '"';
+          }
+          return prefix + attribute + '="' + transitionalLength(element, attribute, value * POINTS_PER_UNIT[unit]) + '"';
+        });
+      return "<w:" + element + attributes + close + ">";
+    });
+  }
+
+  // A JSZip package as docx-preview opens it: a Strict one's XML parts are
+  // replaced by their transitional form; any other is left as it is.
+  function transitionalPackage(zip) {
+    var rels = zip && zip.files && zip.files["_rels/.rels"];
+    if (!rels) {
+      return Promise.resolve(zip);
+    }
+    return rels.async("string").then(function (text) {
+      if (text.indexOf(STRICT_MARK) < 0) {
+        return zip;
+      }
+      var names = Object.keys(zip.files).filter(function (name) {
+        return !zip.files[name].dir && /\.(xml|rels)$/i.test(name);
+      });
+      return Promise.all(names.map(function (name) {
+        return zip.files[name].async("string").then(function (part) {
+          var converted = transitionalXml(part);
+          if (converted !== part) {
+            zip.file(name, converted);
+          }
+        });
+      })).then(function () {
+        return zip;
+      });
+    });
+  }
+
   return Object.freeze({
     SYMBOL: SYMBOL,
     WINGDINGS: WINGDINGS,
@@ -2025,6 +2793,7 @@
     classifyHref: classifyHref,
     fillPageFields: fillPageFields,
     PAGE_FIELD_START: PAGE_FIELD_START,
+    PAGE_FIELD_END: PAGE_FIELD_END,
     NOTE_REFERENCE_ANCHOR: NOTE_REFERENCE_ANCHOR,
     NOTE_ANCHOR: NOTE_ANCHOR,
     SAVED_PAGE_START: SAVED_PAGE_START,
@@ -2043,6 +2812,17 @@
     colorPalette: colorPalette,
     darkPageColor: darkPageColor,
     PAGE_COLOR_PREFIX: PAGE_COLOR_PREFIX,
+    FLOAT_CLASS: FLOAT_CLASS,
+    floatTextBoxes: floatTextBoxes,
+    inheritHeaderFooters: inheritHeaderFooters,
+    customMarkNotes: customMarkNotes,
+    notesWithReferenceMark: notesWithReferenceMark,
+    TAB_CLASS: TAB_CLASS,
+    markTabs: markTabs,
+    numberingTabs: numberingTabs,
+    parseTabStops: parseTabStops,
+    transitionalXml: transitionalXml,
+    transitionalPackage: transitionalPackage,
     prepareModel: prepareModel
   });
 }));

@@ -42,31 +42,34 @@ changed `assets/reader.js`, `fixups.js` and `reader.css` only: `src/core/`,
 Pull requests, in order. Each one updates this file when it merges.
 
 1. This plan.
-2. No text cut off at the fit zoom. In a headless Chromium check at phone
-   widths, the desktop's two-column test paper loses the last line of a
-   column past the page's edge at 36%, 43% and 66% zoom on main: pages are
-   split at 100% and drawn smaller, where lines take a little more room.
-   With the v0.3.2 reader the page clips at its edge, and a long table
-   loses its last row at 31% to 66%. Failing emulator tests first, then the
-   fix. The tests open the documents the desktop's reader tests build at
-   test time (`tests/reader/make-*.mjs`): floating boxes in a two-column
-   paper, two-column sections, wide tables and a contents line with dot
-   leaders. `scripts/update-reader-assets.sh` writes them into the
-   fixtures, so the emulator tests and the budgets job open the same files
-   as the desktop tests. The repository's own fixtures have no two-column
-   page and no floating table.
-3. The budgets job times opening each of these documents and the
-   repository's feature fixtures, for main and the branch, next to the
-   300-page document it already times.
-4. The reader and core from desktop v0.3.2 through
-   `scripts/update-reader-assets.sh`. Failing emulator tests first, at the
-   phone's width and fit zoom: a floating table at the top of its page
-   across both columns with no text under it, two columns kept, a contents
-   line with its dot leader, wide tables inside the page, each after
-   opening through ACTION_VIEW with a content:// URI, scrolling and
-   rotating. Then the port. The open-time numbers for main and the branch go
-   in the pull request; over 10% slower needs a reason and, where
-   reasonable, a fix.
+2. The budgets job times opening each test document from a cold start
+   (the feature fixtures, the desktop's reader test documents once they are
+   fixtures, the Strict OOXML file and the store document), for main and
+   the branch, next to the 300-page document it already times.
+3. The reader and core from desktop v0.3.2 through
+   `scripts/update-reader-assets.sh`. The repository's own fixtures have no
+   two-column page and no floating table, so the tests open the documents
+   the desktop's reader tests build at test time (`tests/reader/make-*.mjs`),
+   which the update script now writes into `fixtures/reader/` with the
+   desktop's own generators. Failing emulator tests first, at the phone's
+   width and fit zoom: a floating table at the top of its page and a figure
+   at its foot, across both columns, with no text under them; two columns
+   kept; references at their hanging indent; a contents line with its dot
+   leader; wide tables inside the page; Word's page count where 0.3.1 fixed
+   near-empty pages; Strict OOXML lists. Also on a small phone, in
+   landscape and after scrolling by touch. Then the port. The open-time
+   numbers for main and the branch go in the pull request; over 10% slower
+   needs a reason and, where reasonable, a fix.
+4. No text cut off at the fit zoom. In a headless Chromium 141 check at
+   phone widths, the desktop's two-column test paper lost the last line of
+   a column past the page's edge at 36%, 43% and 66% zoom with the main
+   reader, and with the v0.3.2 reader a long table lost its last row at 31%
+   to 66%: pages are split at 100% and drawn smaller, where lines take a
+   little more room. The first try (#28, closed) put the tests before the
+   port; on the CI emulator (WebView 113) the main reader did not lose
+   those lines, and its tests failed only on a text box that the 0.2.0
+   reader draws 3 px past the page, which the port fixes. So the tests and
+   the fix come after the port.
 5. Build provenance attestations in `release.yml` (actions/attest-build-provenance
    v4.2.2, pinned to 4d101475d8b20a2381f78447822ac1eab6504dd8) and the README
    line on `gh attestation verify`.
@@ -74,6 +77,44 @@ Pull requests, in order. Each one updates this file when it merges.
    `5.txt`, release notes in `docs/releases/v0.3.0.md`. The tag, the GitHub
    release and the Play bundle run are left to the maintainer: this session
    cannot push tags.
+
+### Done in round 0.3.0
+
+- #27: this plan.
+- #29: the budgets job times opening each test document from a cold
+  start, three times per build in turn, with page counts, the drawn time
+  and the reader's render time. Run on two builds of the same app (run
+  44318752309): the sum over 23 documents differed by 0.7% (41,895 against
+  42,172 ms), single documents by up to 25% (notes-superscript.docx,
+  1,511 against 1,890 ms). A second run of the same APKs (44322041344)
+  differed by 2.7% in the sum. Compare sums, not single documents.
+- #30: the reader from desktop v0.3.2 through
+  `scripts/update-reader-assets.sh` (reader.js, fixups.js and reader.css;
+  the core, its tests and the desktop fixtures were unchanged). The script
+  also writes the documents the desktop's reader tests build at test time
+  into `fixtures/reader/` (`scripts/desktop-test-documents.mjs`, the
+  desktop's own generators; JSZip's clock-dated folder entries get the
+  generator's date, so the bytes repeat). `PaperLayoutTest` checks, at the
+  phone's fit zoom, on a 320 dp phone, in landscape and after swipes: the
+  floating table at the top of its page and the figure at its foot across
+  both columns with no text under them, the columns, the references'
+  hanging indent, the contents leader, tables inside the page and their
+  text inside the cells, Word's page count for the two 0.3.1 documents (2
+  and 3 pages; main gave 3 and 4), Strict OOXML list numbers, the paper cut
+  short, and the 300-page document. On the tests-only commit 11 of them
+  failed (run 44319002438). The fixture provider serves names ending in
+  `-cut` cut short. The phone test files gain the two-column paper.
+  Measured in three budgets runs (44319086122, 44321116281, 44323772465),
+  main against the branch: the APK 1,543,829 to 1,567,345 bytes (+1.5%);
+  opening 30 test documents, sum of medians, +1.0%, +2.1% and +0.9%;
+  `styles.docx` drawn minus the empty app 1,113 to 1,152, 1,207 to 1,250
+  and 1,123 to 948 ms; the 300-page document drawn 3,246 to 3,253 and
+  3,540 to 3,809 ms; total PSS after it 152,632 to 156,313, 152,750 to
+  155,858 and 153,805 to 157,195 KB (+2.0 to 2.4%, the renderer about
+  3.5 MB more). Single render times jump by about 500 ms at random in
+  either build (the two-column paper: 204 to 843, 804 to 248, 864 to 860
+  ms). The Strict files render 10 to 30 ms slower, as they now get their
+  styles.
 
 ## Round 0.2.0 (November 2026)
 
@@ -240,7 +281,7 @@ Desktop features from 0.1.4 that the app lacks, and why:
 
 ## In progress
 
-- Round 0.3.0: plan above, step 1.
+- Round 0.3.0: step 4, no text cut off at the fit zoom.
 - Round 0.2.0 is done: v0.2.0 was released on 2026-11-06 from the
   maintainer's PC.
 
@@ -268,6 +309,20 @@ apart; here 44 of 45 were in the fast group. The 1,674 against 1,512 ms in
 the last port's budgets were main before and after that port, not 0.1.2.
 
 ## Known gaps
+
+- Android draws Times New Roman in the phone's own serif font (Noto
+  Serif), which is wider. The desktop's two-column test paper takes 5
+  pages on the emulator where Word gives 4; the first line of one of its
+  references has a 4.5 pt tab after its number instead of 9.8 pt; and
+  its contents entry, nearly as long as the line in that font, wraps and
+  ends its page number at 383 pt instead of the 450 pt stop, at 100%
+  too: the desktop reader sizes the tab before the line wraps. The
+  desktop's reader in headless Chromium 141 with Noto Serif in place of
+  Times New Roman gives the same 5 pages and the same short tab; there
+  the contents entry still fits on one line.
+- The CI emulator has Android System WebView 113. Phones with current
+  WebView lay text out a little differently; headless Chromium 141 with
+  the same serif font is the closer check, and was used for it.
 
 - Images and documents linked from outside the file are not shown, by
   design: they would need the network.

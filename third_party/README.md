@@ -13,6 +13,7 @@ the sums file changing with it.
 | `app/src/main/cpp/core/` | desktop LeanDoc `src/core/` | same |
 | `native-tests/CoreTests.cpp`, `TestZip.*` | desktop LeanDoc `tests/core/` | same |
 | `app/src/androidTest/assets/fixtures/` | desktop LeanDoc `tests/fixtures/` | same |
+| `app/src/androidTest/assets/fixtures/reader/` | the documents desktop LeanDoc's reader tests build at test time (`tests/reader/make-*.mjs`), written by `scripts/desktop-test-documents.mjs` | same |
 | `app/src/main/cpp/miniz/` | miniz, through the desktop's `third_party/` | 3.1.2 |
 | `app/src/main/cpp/pugixml/` | pugixml, through the desktop's `third_party/` | 1.16 |
 | `app/src/main/assets/reader/vendor/docx-preview.min.js` | npm `docx-preview` | 0.4.1 |
