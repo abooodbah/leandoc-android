@@ -316,8 +316,10 @@ the last port's budgets were main before and after that port, not 0.1.2.
   references has a 4.5 pt tab after its number instead of 9.8 pt; and
   its contents entry, nearly as long as the line in that font, wraps and
   ends its page number at 383 pt instead of the 450 pt stop, at 100%
-  too: the desktop reader sizes the tab before the line wraps. The same
-  happens on the desktop with a font as wide.
+  too: the desktop reader sizes the tab before the line wraps. The
+  desktop's reader in headless Chromium 141 with Noto Serif in place of
+  Times New Roman gives the same 5 pages and the same short tab; there
+  the contents entry still fits on one line.
 - The CI emulator has Android System WebView 113. Phones with current
   WebView lay text out a little differently; headless Chromium 141 with
   the same serif font is the closer check, and was used for it.
