@@ -122,6 +122,22 @@ class TextOnThePageTest {
     }
 
     @Test
+    fun aGrownSectionGetsItsMeasuredHeightBackAtFullSize() = open(TABLES) { scenario ->
+        drawTallerThanMeasured(scenario, "#docBody td { padding-bottom: 2px !important; }")
+        everyPageKeepsItsText(scenario, fitsTheWidth = false)
+        assertTrue("a section grew", Reader.js(scenario, "document.querySelector('[data-android-height]') !== null") == true)
+        // The rows are as measured again; at 100% no section needs more room.
+        Reader.js(scenario, "document.getElementById('$TALLER').remove()")
+        while (Reader.zoom(scenario) != "100") {
+            val before = Reader.zoom(scenario)
+            Reader.js(scenario, "document.getElementById('zoomIn').click()")
+            Reader.waitFor(scenario, "document.documentElement.dataset.zoom !== '$before' && " + ZOOM_SETTLED)
+        }
+        everyPageKeepsItsText(scenario, fitsTheWidth = false)
+        assertEquals("", Reader.js(scenario, PAGES_TALLER_THAN_PAPER))
+    }
+
+    @Test
     fun atFullSizeEveryPageKeepsItsPaperHeight() = open(TABLES) { scenario ->
         // From the fit zoom up to 100%: a section grown to hold its text at
         // a smaller zoom gets back the height the reader measured.
@@ -160,7 +176,7 @@ class TextOnThePageTest {
     private fun drawTallerThanMeasured(scenario: ActivityScenario<MainActivity>, rule: String) {
         Reader.js(
             scenario,
-            "(function(){var s=document.createElement('style');s.textContent=${org.json.JSONObject.quote(rule)};" +
+            "(function(){var s=document.createElement('style');s.id='$TALLER';s.textContent=${org.json.JSONObject.quote(rule)};" +
                 "document.head.appendChild(s)})()",
         )
         val before = Reader.zoom(scenario)
@@ -204,6 +220,9 @@ class TextOnThePageTest {
         const val CONTENTS = "reader/contents-leaders.docx"
 
         const val PAGES = Reader.PAGES
+
+        /** The id of the style that draws rows or lines taller than measured. */
+        const val TALLER = "android-test-taller"
         const val ZOOM_SETTLED = Reader.ZOOM_SETTLED
 
         /** An empty string when every page is as tall as its paper. */
