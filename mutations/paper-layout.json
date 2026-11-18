@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Leave floating boxes where docx-preview draws them",
+    "suite": "device",
+    "tests": "PaperLayoutTest",
+    "file": "app/src/main/assets/reader/fixups.js",
+    "old": "    stats.floats = floatTextBoxes(modelBody, xmlBody);",
+    "new": "    stats.floats = 0;"
+  },
+  {
+    "name": "Do not put floating boxes at the top or foot of a page",
+    "suite": "device",
+    "tests": "PaperLayoutTest",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "      if (placeFloats(page, articles, layout, deferred)) {\n        continue;\n      }\n",
+    "new": ""
+  },
+  {
+    "name": "Do not size tab stops",
+    "suite": "device",
+    "tests": "PaperLayoutTest",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "    setTabStops(container);",
+    "new": ""
+  },
+  {
+    "name": "Let no text continue past a page Word started across sections",
+    "suite": "device",
+    "tests": "PaperLayoutTest",
+    "file": "app/src/main/assets/reader/reader.js",
+    "old": "  var FLOW_FILL = 0.1;",
+    "new": "  var FLOW_FILL = 0;"
+  },
+  {
+    "name": "Do not recognise Strict OOXML",
+    "suite": "device",
+    "tests": "PaperLayoutTest",
+    "file": "app/src/main/assets/reader/fixups.js",
+    "old": "  var STRICT_MARK = \"http://purl.oclc.org/ooxml/\";",
+    "new": "  var STRICT_MARK = \"http://example.invalid/\";"
+  }
+]
