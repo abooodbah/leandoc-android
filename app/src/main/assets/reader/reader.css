@@ -1216,6 +1216,10 @@ body {
   background: var(--ld-paper, #ffffff);
   box-shadow: var(--page-shadow);
   color: var(--ld-ink, #000000);
+  /* Word prints nothing past the paper's edge: a header whose right indent
+     reaches past the page put its page number beside the page here, and
+     Word's PDF of it has none. clip, unlike hidden, makes no scroll box. */
+  overflow: clip;
 }
 
 /* docx-preview hyphenates every document; Word only one whose settings turn
@@ -1251,6 +1255,19 @@ body {
   content: none !important;
 }
 
+/* A paragraph split inside a word at the foot of a page (reader.js
+   splitParagraph) ends with the hyphen its line break printed. */
+#docBody section.docx p[data-ld-hyphen]::after {
+  content: "-";
+}
+
+/* A hyphen that would push the line's last letters onto a line of their own
+   takes no room on the line: it is drawn where it would start, after the
+   last letter (reader.js markHyphen). */
+#docBody section.docx p[data-ld-hyphen="hang"]::after {
+  position: absolute;
+}
+
 #docBody section.docx p[data-ld-continued] {
   list-style-type: none !important;
 }
@@ -1265,6 +1282,66 @@ body {
 
 #docBody .docx-wrapper > section.docx > article:last-of-type {
   margin-bottom: auto;
+}
+
+/* A text box Word floats with text above and below it (fixups.js
+   floatTextBoxes): a block of its own, never drawn over the text. The page
+   view puts it at the top or foot of its page across the columns; elsewhere
+   it sits before its anchor's paragraph and spans a section's columns. */
+#docBody .ld-float {
+  display: block !important;
+  max-width: 100%;
+  flex-shrink: 0;
+  column-span: all;
+  break-inside: avoid;
+}
+
+/* A tab is as wide as the distance to its stop (reader.js setTabStops). */
+#docBody span.ld-tab {
+  display: inline-block;
+  text-indent: 0;
+}
+
+/* A token of an equation is set on one line. docx-preview's runs may wrap
+   anywhere (pre-wrap, break-word), and a sum written as one run longer than
+   the line wrapped inside its token, which shows its first line only: the
+   rest of the equation was lost. */
+#docBody math {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+/* An equation wider than its column, set on several lines (reader.js
+   wrapWideMaths): the lines are left-aligned as one block, which the
+   paragraph places. */
+#docBody span.ld-math-lines {
+  display: inline-block;
+  text-align: left;
+}
+
+#docBody span.ld-tab-leader {
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: text-bottom;
+}
+
+/* A footnote with the author's own mark (w:customMarkFollows) shows that
+   mark, not a number. */
+#docBody sup.ld-custom-mark {
+  display: none;
+}
+
+#docBody li.ld-custom-mark {
+  list-style-type: none;
+}
+
+/* The empty span that marks a footnote reference (Fixups.markNotes) took
+   the paragraph style's run size, which can be larger than the text's own:
+   in a 24 pt title paragraph it made an 11 pt author line 15 pt taller than
+   Word's. The mark is not printed, so it takes no height. */
+#docBody section.docx span:empty:is([id^="ld-fnref-"], [data-ld-anchor^="ld-fnref-"]) {
+  font-size: 0;
+  line-height: 0;
 }
 
 /* Footnotes at the foot of their page, under a short rule as Word prints them. */
@@ -1683,4 +1760,33 @@ body {
     box-shadow: none;
     content-visibility: visible;
   }
+}
+
+/* Small capitals as Word draws them: capitals at 80% of the run's size,
+   to the nearest half point (reader.js matchSmallCaps sets the size). The
+   span is inside the run's own span, so it takes everything else from it:
+   the document's and the paragraph style's rules for "span" (font, size,
+   weight, colour) would otherwise reach it and beat the run's own font.
+   It adds no height to the line: Word's line is as tall as the run's full
+   size, and the smaller letters on the paragraph's fixed line height made
+   a heading line 0.75 pt taller. */
+#docBody span.ld-sc {
+  all: unset;
+  font-size: 80%;
+  line-height: 0;
+  font-kerning: none;
+  font-variant-caps: normal;
+  text-transform: uppercase;
+}
+
+#docBody span.ld-sc-keep {
+  text-transform: none;
+}
+
+/* A numbering label centred or right-aligned on its indent (reader.js
+   alignLabels sets the shift). */
+#docBody p.ld-lj-center::before,
+#docBody p.ld-lj-right::before {
+  display: inline-block;
+  margin-left: var(--ld-lj, 0px);
 }

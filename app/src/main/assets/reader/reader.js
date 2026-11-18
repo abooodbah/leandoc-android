@@ -495,7 +495,9 @@
       ignoreFonts: true,
       breakPages: !reading,
       ignoreLastRenderedPageBreak: false,
-      experimental: true,
+      // LeanDoc sizes tabs itself (setTabStops); docx-preview's experimental
+      // tabs changed widths half a second after the pages were split.
+      experimental: false,
       trimXmlDeclaration: true,
       renderHeaders: !reading,
       renderFooters: !reading,
@@ -704,6 +706,9 @@
       var entry = {
         doc: parsed,
         hyphenate: prepared.autoHyphenation,
+        tabInterval: prepared.defaultTabStop,
+        customMarks: prepared.customMarkNotes || [],
+        numberedCustomMarks: prepared.numberedCustomMarkNotes || [],
         titleSections: prepared.titleSections || [],
         colors: { palette: prepared.palette || [], theme: prepared.themeColors || {} },
         saved: keep ? saveModel(parsed) : null
@@ -713,6 +718,22 @@
       }
       return entry;
     });
+  }
+
+  // docx-preview opens a package with JSZip.loadAsync; a Strict OOXML one
+  // is rewritten to the transitional form there (Fixups.transitionalPackage),
+  // before docx-preview reads any part of it.
+  function openStrictPackages() {
+    var zip = window.JSZip;
+    if (!zip || typeof zip.loadAsync !== "function" || !Fixups || zip.loadAsync.leanDocStrict) {
+      return;
+    }
+    var load = zip.loadAsync;
+    var open = function () {
+      return load.apply(this, arguments).then(Fixups.transitionalPackage);
+    };
+    open.leanDocStrict = true;
+    zip.loadAsync = open;
   }
 
   function renderPackage(serial, ratio, started, firstRender) {
@@ -745,6 +766,9 @@
           return null;
         }
         documentColors = model.colors;
+        documentTabInterval = model.tabInterval > 0 ? model.tabInterval : 36;
+        documentCustomMarks = model.customMarks || [];
+        documentNumberedCustomMarks = model.numberedCustomMarks || [];
         updatePageColorStyle();
         return attachDocument(nodes, view, serial, model.hyphenate).then(function (attached) {
           if (attached) {
@@ -1198,13 +1222,18 @@
   // The first character or inline object of a paragraph that lies past the
   // text area, or null. Text in a column layout breaks between lines, so the
   // first character past the area starts a line.
+  // A character's own box is its last rectangle: the first character after
+  // a line broken at a hyphenation point also returns, first, the box of
+  // the hyphen Chrome prints at the end of the line before. Read from that
+  // box, the page split fell one letter late: "exp" | "eriments" where the
+  // line broke at "ex-", and the hyphen was printed after the wrong letter.
   function firstPointPast(paragraph, over) {
     var range = document.createRange();
     function charOver(node, offset) {
       range.setStart(node, offset);
       range.setEnd(node, offset + 1);
       var rects = range.getClientRects();
-      return rects.length > 0 && over(rects[0]);
+      return rects.length > 0 && over(rects[rects.length - 1]);
     }
     function visit(parent) {
       for (var child = parent.firstChild; child; child = child.nextSibling) {
@@ -1260,7 +1289,9 @@
   // the part that moves, or null when no line of it fits. A list item splits
   // too, as in Word; its continuation shows no number (reader.css). Moved
   // whole, a 204 pt numbered paragraph left most of a column empty.
-  function splitParagraph(paragraph, over) {
+  // The range of a paragraph that stays on the page when it is split, or
+  // null when it moves whole.
+  function keptPart(paragraph, over) {
     if (paragraph.nodeName !== "P" || /(^|\s)ld-keep-lines(\s|$)/.test(paragraph.className)) {
       return null;
     }
@@ -1288,21 +1319,145 @@
     if (safe !== point) {
       keepBefore(safe);
     }
+    return kept;
+  }
+
+  // Letters of the scripts Chrome and Word hyphenate.
+  var HYPHENATED_LETTER = /[A-Za-z\u00c0-\u024f\u0370-\u03ff\u0400-\u04ff]/;
+  // Those letters and the digits: a line breaks between two of them only at
+  // a hyphenation point, and Chrome hyphenates no number.
+  var WORD_CHARACTER = /[0-9A-Za-z\u00c0-\u024f\u0370-\u03ff\u0400-\u04ff]/;
+
+  // Whether an element parts the text before it from the text after it:
+  // a line break, a tab, a picture or equation, or a box that is not inline.
+  function partsWords(element) {
+    return element.nodeName === "BR" || !!element.closest(ATOMIC_SELECTOR + ", ." + Fixups.TAB_CLASS) ||
+      window.getComputedStyle(element).display !== "inline";
+  }
+
+  // Whether a split point (a text node and offset) falls inside a word: the
+  // character after it is a letter or digit, the one before it a letter,
+  // a digit or a soft hyphen, with only inline boxes between them; no line
+  // break, tab, picture or space. Range text leaves a <br> out, so two lines joined by
+  // one read as one word, and the first line's end took a hyphen. Returns
+  // where that word starts (node and offset), whether a soft hyphen ends
+  // the part before the split and whether letters meet there (a point a
+  // hyphenation can break at), or null.
+  function wordAround(paragraph, node, offset) {
+    if (!node || node.nodeType !== Node.TEXT_NODE || !WORD_CHARACTER.test(node.nodeValue.charAt(offset))) {
+      return null;
+    }
+    var after = node.nodeValue.charAt(offset);
+    var walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    var current = node;
+    var at = offset;
+    var start = null;
+    var soft = false;
+    var letters = false;
+    for (;;) {
+      var text = current.nodeValue;
+      var index = at;
+      if (index > 0) {
+        if (!start) {
+          var before = text.charAt(index - 1);
+          soft = before === "\u00ad";
+          if (!soft && !WORD_CHARACTER.test(before)) {
+            return null;
+          }
+          letters = HYPHENATED_LETTER.test(before) && HYPHENATED_LETTER.test(after);
+        }
+        while (index > 0 && !/\s/.test(text.charAt(index - 1))) {
+          index -= 1;
+        }
+        start = { node: current, offset: index, soft: soft, letters: letters };
+        if (index > 0) {
+          return start;
+        }
+      }
+      // The text node before this one, through the inline boxes around it.
+      walker.currentNode = current;
+      var previous = walker.previousNode();
+      while (previous && previous.nodeType === Node.ELEMENT_NODE) {
+        if (!previous.contains(current) && partsWords(previous)) {
+          return start;
+        }
+        previous = walker.previousNode();
+      }
+      if (!previous || previous.parentElement.closest(ATOMIC_SELECTOR + ", ." + Fixups.TAB_CLASS)) {
+        return start;
+      }
+      current = previous;
+      at = previous.nodeValue.length;
+    }
+  }
+
+  function splitParagraph(paragraph, over) {
+    var kept = keptPart(paragraph, over);
+    if (!kept) {
+      return null;
+    }
     var moving = document.createRange();
     moving.setStart(kept.endContainer, kept.endOffset);
     moving.setEnd(paragraph, paragraph.childNodes.length);
+    // A page that starts inside a word: the line broke at a hyphenation
+    // point, whose hyphen Chrome prints only where a line breaks. Word
+    // prints it at the foot of the page. Only a split inside a word takes
+    // one, and only where a line can break inside a word: at a soft hyphen,
+    // or in a paragraph Chrome hyphenates (the document turns automatic
+    // hyphenation on). In a document that leaves it off, Word does not
+    // break a word at the foot of a page: the whole word goes on to the
+    // next page.
+    // A part split again (settleSplit) hands its old end, and that end's
+    // hyphen, to the new middle part.
+    var endHyphen = paragraph.getAttribute("data-ld-hyphen");
+    var word = wordAround(paragraph, kept.endContainer, kept.endOffset);
+    var hyphen = false;
+    if (word) {
+      if (word.soft || word.letters && window.getComputedStyle(paragraph).hyphens === "auto") {
+        hyphen = true;
+      } else {
+        kept.setEnd(word.node, word.offset);
+        if (!kept.toString().trim() && !kept.cloneContents().querySelector(ATOMIC_SELECTOR)) {
+          return null;
+        }
+        moving.setStart(kept.endContainer, kept.endOffset);
+      }
+    }
+    paragraph.removeAttribute("data-ld-hyphen");
     var rest = paragraph.cloneNode(false);
     rest.removeAttribute("id");
+    if (endHyphen !== null) {
+      rest.setAttribute("data-ld-hyphen", endHyphen);
+    }
     rest.appendChild(moving.extractContents());
+    if (hyphen) {
+      markHyphen(paragraph);
+    }
     rest.setAttribute("data-ld-continued", "");
     rest.style.textIndent = "0";
     rest.style.marginTop = "0";
+    if (!paragraph[SPLIT_STYLE]) {
+      paragraph[SPLIT_STYLE] = { marginBottom: paragraph.style.marginBottom, textAlignLast: paragraph.style.textAlignLast };
+    }
     paragraph.style.marginBottom = "0";
     if (window.getComputedStyle(paragraph).textAlign === "justify") {
       paragraph.style.textAlignLast = "justify";
     }
     paragraph.parentNode.insertBefore(rest, paragraph.nextSibling);
     return rest;
+  }
+
+  // Marks the end of a part split inside a word for the hyphen Word prints
+  // there (reader.css). The hyphen takes the paragraph's size, which can be
+  // wider than the one the line was laid out with, and it must not push the
+  // line's last letters onto a line of their own past the page: when the
+  // part grows with it, the hyphen takes no room on the line.
+  function markHyphen(paragraph) {
+    var height = paragraph.getBoundingClientRect().height;
+    paragraph.setAttribute("data-ld-hyphen", "");
+    if (paragraph.getBoundingClientRect().height > height + 0.5) {
+      paragraph.setAttribute("data-ld-hyphen", "hang");
+    }
   }
 
   // Lays out the page's sections for a text area that ends at `limit` and
@@ -1563,9 +1718,326 @@
     });
   }
 
+  // Text boxes Word floats (Fixups.floatTextBoxes). Each leaves an empty
+  // mark where it was anchored and becomes a block of its own before its
+  // anchor's paragraph (liftFloats), where the reading view shows it and its
+  // lines are matched. In a section with columns it spans them all
+  // (reader.css). The page view then takes a box that Word positions on the
+  // page off the text (takePageFloats) and puts it at the top or the foot of
+  // the first page whose text area holds its mark, across the columns, so
+  // the text of every column flows below or above it (placeFloats).
+  // A split paragraph's own margin and last-line alignment, for a join.
+  var SPLIT_STYLE = "__ldSplitStyle";
+  var FLOAT_BOX = "__ldFloat";
+  var FLOAT_MARK = "__ldFloatMark";
+
+  // A footnote with a mark of the author's own (Fixups.customMarkNotes)
+  // shows that mark, not docx-preview's number, at the reference and in
+  // the note, unless the note starts with its own reference mark
+  // (Fixups.notesWithReferenceMark): Word prints the number there.
+  var documentCustomMarks = [];
+  var documentNumberedCustomMarks = [];
+
+  function hideCustomMarks(container) {
+    if (!container.querySelector) {
+      return;
+    }
+    documentCustomMarks.forEach(function (id) {
+      var anchor = container.querySelector("[id='" + Fixups.NOTE_REFERENCE_ANCHOR + id + "']");
+      var number = anchor ? anchor.nextElementSibling : null;
+      if (number && number.nodeName === "SUP") {
+        number.classList.add("ld-custom-mark");
+      }
+      var note = container.querySelector("[id='" + Fixups.NOTE_ANCHOR + id + "']");
+      var item = note ? note.closest("li") : null;
+      if (item && documentNumberedCustomMarks.indexOf(id) < 0) {
+        item.classList.add("ld-custom-mark");
+      }
+    });
+  }
+
+  function liftFloats(container) {
+    if (!container.querySelectorAll) {
+      return;
+    }
+    container.querySelectorAll("." + Fixups.FLOAT_CLASS).forEach(function (box) {
+      var holder = box.parentNode;
+      var paragraph = holder && holder.closest ? holder.closest("p") : null;
+      if (!paragraph || !paragraph.parentNode) {
+        return;
+      }
+      // docx-preview's picture container holds only the box.
+      if (holder === paragraph || holder.nodeName !== "DIV" || holder.childNodes.length !== 1) {
+        holder = box;
+      }
+      var mark = document.createElement("span");
+      mark.className = "ld-float-mark";
+      mark[FLOAT_BOX] = box;
+      box[FLOAT_MARK] = mark;
+      holder.parentNode.replaceChild(mark, holder);
+      paragraph.parentNode.insertBefore(box, paragraph);
+    });
+  }
+
+  function isPageFloat(node) {
+    return hasClass(node, Fixups.FLOAT_CLASS + "-top") || hasClass(node, Fixups.FLOAT_CLASS + "-bottom");
+  }
+
+  function takePageFloats(pages) {
+    var boxes = [];
+    pages.forEach(function (page) {
+      page.querySelectorAll("." + Fixups.FLOAT_CLASS).forEach(function (box) {
+        if (box[FLOAT_MARK] && isPageFloat(box)) {
+          box.parentNode.removeChild(box);
+          boxes.push(box);
+        }
+      });
+    });
+    return boxes;
+  }
+
+  // A box no page took (a page past the budget, or one without a height)
+  // goes back before its anchor's paragraph.
+  function restoreFloats(boxes) {
+    boxes.forEach(function (box) {
+      var paragraph = box.parentNode ? null : box[FLOAT_MARK].closest("p");
+      if (paragraph && paragraph.parentNode) {
+        paragraph.parentNode.insertBefore(box, paragraph);
+      }
+    });
+  }
+
+  function pageFloats(page, place) {
+    return Array.prototype.filter.call(page.children, function (child) {
+      return hasClass(child, Fixups.FLOAT_CLASS + "-" + place);
+    });
+  }
+
+  function floatsHeight(page, place) {
+    var height = 0;
+    pageFloats(page, place).forEach(function (box) {
+      var style = window.getComputedStyle(box);
+      height += box.getBoundingClientRect().height + (parseFloat(style.marginTop) || 0) +
+        (parseFloat(style.marginBottom) || 0);
+    });
+    return height;
+  }
+
+  // Puts a box at the top of the page's text area, after the boxes already
+  // there, or at its foot, above the notes.
+  function insertPageFloat(page, box) {
+    var articles = childrenNamed(page, "ARTICLE");
+    if (hasClass(box, Fixups.FLOAT_CLASS + "-top")) {
+      page.insertBefore(box, articles[0] || null);
+      return;
+    }
+    var after = articles.length ? articles[articles.length - 1] : null;
+    var bottoms = pageFloats(page, "bottom");
+    if (bottoms.length) {
+      after = bottoms[bottoms.length - 1];
+    }
+    page.insertBefore(box, after ? after.nextSibling : null);
+  }
+
+  // Whether an empty mark lies past the text area. Its box has no width, so
+  // at the left edge of the first column it would read as left of the text.
+  function markIsOver(mark, over) {
+    var rect = mark.getClientRects()[0];
+    return !rect || over({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.left + 1 });
+  }
+
+  // Places the boxes whose marks lie in the page's text area; true when one
+  // was placed and the page must be laid out again. A deferred box waits for
+  // the next page.
+  function placeFloats(page, articles, layout, deferred) {
+    var placed = false;
+    articles.forEach(function (article, index) {
+      var over = layout.tests[index];
+      article.querySelectorAll(".ld-float-mark").forEach(function (mark) {
+        var box = mark[FLOAT_BOX];
+        if (!box || box.parentNode || deferred.indexOf(box) >= 0 || (over && markIsOver(mark, over))) {
+          return;
+        }
+        insertPageFloat(page, box);
+        placed = true;
+      });
+    });
+    return placed;
+  }
+
+  // The boxes on the page whose marks the boxes themselves pushed past it.
+  // Word keeps a box on the page of its anchor's paragraph, so such a box
+  // and its paragraph go to the next page together; left here, the box
+  // printed a page before its anchor.
+  // A paragraph that starts the page keeps its box, which has nowhere better
+  // to go.
+  // A paragraph moves with the headings kept with it, so a mark in such a
+  // heading moves too.
+  function strandedFloats(page, articles, layout) {
+    var first = articles.length ? articles[0].firstElementChild : null;
+    var moved = firstMovedBlock(articles, layout);
+    return Array.prototype.filter.call(page.children, function (box) {
+      var mark = isPageFloat(box) ? box[FLOAT_MARK] : null;
+      var index = mark ? articles.indexOf(mark.closest("article")) : -1;
+      if (index < 0 || !layout.tests[index]) {
+        return false;
+      }
+      var block = blockOf(articles[index], mark);
+      if (block === first) {
+        return false;
+      }
+      return markIsOver(mark, layout.tests[index]) ||
+        (!!moved && (block === moved || !!(moved.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING)));
+    });
+  }
+
+  // The block of `article` that holds `node`.
+  function blockOf(article, node) {
+    while (node && node.parentNode !== article) {
+      node = node.parentNode;
+    }
+    return node;
+  }
+
+  // Ends the page before the paragraph that anchors the first deferred box,
+  // unless the page already ends before it.
+  function breakBeforeAnchor(articles, layout, deferred) {
+    var marks = deferred.map(function (box) {
+      return box[FLOAT_MARK];
+    }).sort(function (a, b) {
+      return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+    var article = marks.length ? marks[0].closest("article") : null;
+    var block = article ? blockOf(article, marks[0]) : null;
+    if (!block || articles.indexOf(article) < 0) {
+      return;
+    }
+    if (layout.start && !(block.compareDocumentPosition(layout.start) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+      return;
+    }
+    layout.start = block;
+    layout.index = articles.indexOf(article);
+    layout.whole = true;
+  }
+
+  // Splitting a paragraph can change how its kept lines wrap: a justified
+  // paragraph whose last kept line broke inside a word at the foot of a
+  // column took one more line once split, and that line printed in a third
+  // column past the page's edge. Whatever still lies past the text area
+  // after the split goes to the front of the next page. Only a page whose
+  // last block ends past the text area is laid out again: doing it for every
+  // page cost a 19-page paper 7% of its opening time. The check waits until
+  // the next page is split (settlePending), where the layout it reads is the
+  // one that page needs anyway; run at once, it laid every page out twice.
+  function settleSplit(page, next, articles, styles, limit) {
+    var target = childrenNamed(next, "ARTICLE")[0];
+    for (var round = 0; target && round < 4; round += 1) {
+      var kept = [];
+      var keptStyles = [];
+      articles.forEach(function (article, index) {
+        if (article.parentNode === page) {
+          kept.push(article);
+          keptStyles.push(styles[index]);
+        }
+      });
+      if (!kept.length || !endsPast(kept[kept.length - 1], limit)) {
+        return;
+      }
+      var check = layOutPage(kept, keptStyles, limit);
+      var article = check.start ? kept[check.index] : null;
+      // Only the page's last section continues on the next page.
+      if (!article || article !== kept[kept.length - 1]) {
+        return;
+      }
+      var start = check.start;
+      if (!check.whole) {
+        // A block other than a paragraph that only partly fits (a table)
+        // was already split by rows; moving all of it would leave a gap.
+        if (start.nodeName !== "P") {
+          return;
+        }
+        start = splitParagraph(start, check.tests[check.index]) || start;
+      }
+      if (start === article.firstElementChild) {
+        return;
+      }
+      var head = target.firstElementChild;
+      var front = target.firstChild;
+      var tail = null;
+      for (var node = start; node;) {
+        var following = node.nextSibling;
+        target.insertBefore(node, front);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          tail = node;
+        }
+        node = following;
+      }
+      joinSplitParagraph(tail, head);
+    }
+  }
+
+  // Whether an article's last block ends below `limit` or right of the
+  // article (in a column past its last).
+  function endsPast(article, limit) {
+    var last = article.lastElementChild;
+    if (!last) {
+      return false;
+    }
+    var rects = last.getClientRects();
+    if (!rects.length) {
+      return true;
+    }
+    var rect = rects[rects.length - 1];
+    // A wide table may run past a one-column page's text on purpose; only a
+    // column page can push text into a column beside the page.
+    return rect.bottom > limit + 0.5 ||
+      (columnCount(article) > 1 && rect.right > article.getBoundingClientRect().right + 1);
+  }
+
+  // Joins the moved end of a split paragraph and its continuation, which
+  // the first split put at the top of the next page.
+  function joinSplitParagraph(tail, head) {
+    var key = paragraphKey(tail);
+    if (key === null || !head || key !== paragraphKey(head) || !head.hasAttribute("data-ld-continued")) {
+      return;
+    }
+    // The joined part ends where the continuation ended.
+    var endHyphen = head.getAttribute("data-ld-hyphen");
+    while (head.firstChild) {
+      tail.appendChild(head.firstChild);
+    }
+    head.parentNode.removeChild(head);
+    if (endHyphen !== null) {
+      tail.setAttribute("data-ld-hyphen", endHyphen);
+    } else {
+      tail.removeAttribute("data-ld-hyphen");
+    }
+    var saved = tail[SPLIT_STYLE];
+    if (saved) {
+      tail.style.marginBottom = saved.marginBottom;
+      tail.style.textAlignLast = saved.textAlignLast;
+      tail[SPLIT_STYLE] = null;
+    }
+  }
+
+  // The split page whose settleSplit waits for its next page, or null.
+  var pendingSettle = null;
+
+  // Runs the waiting settleSplit, when it waits for `next` or, with no
+  // argument, whatever it waits for.
+  function settlePending(next) {
+    var pending = pendingSettle;
+    if (!pending || (next && pending.next !== next)) {
+      return;
+    }
+    pendingSettle = null;
+    settleSplit(pending.page, pending.next, pending.articles, pending.styles, pending.limit);
+  }
+
   // Splits one page at its bottom margin and returns the new page after it,
   // or null when everything already fits or nothing more can move.
   function splitPage(page, notes) {
+    settlePending(page);
     var bottom = contentBottom(page);
     if (bottom === null) {
       return null;
@@ -1579,15 +2051,27 @@
     // note to the next page; a few rounds settle it.
     var placed = [];
     var layout = null;
+    var deferred = [];
     for (;;) {
       for (var round = 0; round < 4; round += 1) {
-        layout = layOutPage(articles, styles, bottom - notesHeight(page));
+        layout = layOutPage(articles, styles, bottom - notesHeight(page) - floatsHeight(page, "bottom"));
         var ids = referencedNotes(page, notes, layout.tests);
         if (sameIds(ids, placed)) {
           break;
         }
         placed = ids;
         placeNotes(page, notes, ids);
+      }
+      if (placeFloats(page, articles, layout, deferred)) {
+        continue;
+      }
+      var stranded = strandedFloats(page, articles, layout);
+      if (stranded.length) {
+        stranded.forEach(function (box) {
+          page.removeChild(box);
+          deferred.push(box);
+        });
+        continue;
       }
       // The page's last block can end inside its own spacing after: the page
       // is full, but no block lies past it. The waiting blocks come next and
@@ -1597,7 +2081,14 @@
         break;
       }
     }
+    if (deferred.length) {
+      breakBeforeAnchor(articles, layout, deferred);
+    }
     var next = layout.start ? moveRest(page, articles, styles, layout) : null;
+    if (next) {
+      pendingSettle = { page: page, next: next, articles: articles, styles: styles,
+        limit: bottom - notesHeight(page) - floatsHeight(page, "bottom") };
+    }
     // A one-column section keeps the height it was measured at: restored,
     // the last kept paragraph's bottom margin, dropped at the break, grew the
     // page. One holding a block taller than the page gets its own height.
@@ -1607,6 +2098,30 @@
       }
     });
     return next;
+  }
+
+  // A block that moves to the next page takes the headings before it along.
+  function withHeadings(start, first) {
+    var previous = start.previousElementSibling;
+    while (previous && previous !== first && isHeadingBlock(previous)) {
+      start = previous;
+      previous = previous.previousElementSibling;
+    }
+    return start;
+  }
+
+  // The first block moveRest will move whole, the headings it takes along
+  // included, or null when the page's first block or a split comes first.
+  function firstMovedBlock(articles, layout) {
+    var start = layout.start;
+    var first = articles.length ? articles[0].firstElementChild : null;
+    if (!start || start === first) {
+      return null;
+    }
+    if (!layout.whole && (start.nodeName === "TABLE" || keptPart(start, layout.tests[layout.index]))) {
+      return null;
+    }
+    return withHeadings(start, first);
   }
 
   // Moves everything from the first block past the page to a new page.
@@ -1634,11 +2149,7 @@
         return null;
       }
     } else {
-      var previous = start.previousElementSibling;
-      while (previous && previous !== first && isHeadingBlock(previous)) {
-        start = previous;
-        previous = previous.previousElementSibling;
-      }
+      start = withHeadings(start, first);
     }
 
     var next = page.cloneNode(false);
@@ -1674,10 +2185,10 @@
         page.removeChild(source);
       }
     }
-    // Endnotes follow the text to its last page.
+    // Endnotes follow the text to its last page; placed text boxes stay.
     Array.prototype.slice.call(page.children).forEach(function (child) {
       if (child.nodeName !== "HEADER" && child.nodeName !== "ARTICLE" && child.nodeName !== "FOOTER" &&
-          !child.classList.contains("ld-footnotes")) {
+          !child.classList.contains("ld-footnotes") && !isPageFloat(child)) {
         next.appendChild(child);
       }
     });
@@ -1718,17 +2229,114 @@
     return !!first && !!first.querySelector("[id^='" + Fixups.SAVED_PAGE_START + "']");
   }
 
+  // The text that does not fit can span sections. Its last section is the
+  // one the saved start is in, and continues in the first section of the
+  // page that starts there. The sections before it ended at continuous
+  // breaks: Word sets them at the top of the next page in their own columns,
+  // balanced, and that page's first section follows (Word 16 on
+  // tests/reader/make-section-flow-docx.mjs). Two lines of two-column text
+  // before a one-column figure section had made a page of their own. Such
+  // text continues when it takes at most FLOW_FILL of a page's text height.
+  var FLOW_FILL = 0.1;
+
+  // Whether the text of `page`, just split off, takes at most FLOW_FILL of
+  // its text area's height.
+  function isShort(page) {
+    var articles = childrenNamed(page, "ARTICLE");
+    var top = articles[0].getBoundingClientRect().top;
+    var limit = top + (contentBottom(page) - top) * FLOW_FILL;
+    fillPage(page, limit);
+    return articles[articles.length - 1].getBoundingClientRect().bottom <= limit;
+  }
+
+  // What Word places itself, docx-preview draws in the column where its
+  // anchor falls: a floating table (w:tblpPr), a picture with text wrapped
+  // around it (wp:anchor) and a drop cap (w:framePr) as CSS floats, and a
+  // picture with text above and below it, or one over the text, from the
+  // start of its anchor's line. One wider than its column reaches across the
+  // next column from the first, and runs past the page's edge from the last
+  // (to the left, when it floats right), where Word sets a table or a
+  // picture from the margin and breaks a dropped word inside its column. A
+  // page break that moves can move such a thing from one column to another:
+  // the caption of a figure in a 14-page paper, whole at the foot of a first
+  // column, started the second column a page earlier and ran past the page.
+  // A document that has one in a section with columns keeps the page breaks
+  // it had (flowsInto). A one-column section has one place for it, wherever
+  // the page breaks fall. A table or a picture in the text's flow goes with
+  // its column in Word too.
+  var wideFloats = false;
+
+  // Whether Word places `node` itself: a float, or the picture of an anchor
+  // that text does not wrap around. docx-preview makes the holder of such a
+  // picture as wide as its line ("100%", text above and below) or gives it
+  // no width ("0px", over the text); the holder of a picture in a line of
+  // text has the picture's width.
+  function isAnchored(node) {
+    if (node.style.cssFloat) {
+      return true;
+    }
+    var width = node.parentElement.style.width;
+    return width === "100%" || width === "0px";
+  }
+
+  // A drop cap of one letter is not measured. Measuring anything here lays
+  // the whole document out once more, and a 19-page paper whose only float
+  // is such a letter, 27 px wide, opened 20 to 40 ms later.
+  function isDroppedLetter(node) {
+    return node.nodeName === "P" && node.textContent.length < 2;
+  }
+
+  function hasWideFloat(pages) {
+    return pages.some(function (page) {
+      return childrenNamed(page, "ARTICLE").some(function (article) {
+        if (columnCount(article) < 2) {
+          return false;
+        }
+        return Array.prototype.some.call(article.querySelectorAll("[style*='float'], img"), function (node) {
+          return isAnchored(node) && !isDroppedLetter(node) && node.getBoundingClientRect().width > columnWidth(article);
+        });
+      });
+    });
+  }
+
   function flowsInto(rest, page) {
-    if (!page || !startsAtSavedBreak(page) || rest.style.cssText !== page.style.cssText) {
+    if (!page || !startsAtSavedBreak(page)) {
       return false;
     }
     var from = childrenNamed(rest, "ARTICLE");
-    var to = childrenNamed(page, "ARTICLE");
+    var last = from[from.length - 1];
+    var first = childrenNamed(page, "ARTICLE")[0];
     // A column section flows too, into a section with the same columns: in
     // two-column papers each overflow made a page that held a paragraph or
     // two, and a 17-page paper showed as 23 pages.
-    return from.length === 1 && to.length > 0 && columnCount(from[0]) === columnCount(to[0]) &&
-      from[0].style.cssText === to[0].style.cssText;
+    if (columnCount(last) !== columnCount(first) || last.style.cssText !== first.style.cssText) {
+      return false;
+    }
+    var same = rest.style.cssText === page.style.cssText;
+    if (from.length === 1 && same) {
+      return true;
+    }
+    // The two cases below move page breaks that stood before them.
+    if (wideFloats) {
+      return false;
+    }
+    // `rest` copies the size and margins of the page it came off, which are
+    // those of that page's first section. Text of the one section that
+    // starts `page` takes that page's own: in Word a page has the top margin
+    // of the section at its top, and a paper whose title section's top
+    // margin is 1 pt less than its text's showed a line and a half on a page
+    // alone.
+    if (from.length === 1) {
+      return true;
+    }
+    // Earlier sections join only a page of the same size and margins (a
+    // continuous section on another page size starts a new page in Word),
+    // and only when the text is short. Word has no such limit. Here it
+    // keeps the change to the line or two that Word fits on the page
+    // before: text that takes more of a page keeps its own page, as it did,
+    // because continued it moved the starts of the pages after it off
+    // Word's.
+    return same && isShort(rest);
   }
 
   // Takes every node of an article, waiting ones included, off it.
@@ -1752,11 +2360,16 @@
 
   // Moves the page `rest` holds to the front of `page`, which starts at a
   // saved page start, and removes `rest`. docx-preview split the paragraph
-  // the saved start is in; its two parts become one paragraph again.
+  // the saved start is in; its two parts become one paragraph again. The
+  // sections of `rest` before its last stay sections of their own, above.
   function flowInto(rest, page) {
     var target = childrenNamed(page, "ARTICLE")[0];
-    var moving = takeNodes(childrenNamed(rest, "ARTICLE")[0]);
+    var sections = childrenNamed(rest, "ARTICLE");
+    var moving = takeNodes(sections.pop());
     var staying = takeNodes(target);
+    sections.forEach(function (article) {
+      page.insertBefore(article, target);
+    });
     var tail = null;
     for (var back = moving.length - 1; back >= 0 && !tail; back -= 1) {
       tail = moving[back].nodeType === Node.ELEMENT_NODE ? moving[back] : null;
@@ -1806,6 +2419,9 @@
     var result = [];
     var budget = PAGINATION_LIMIT;
     var notes = collectFootnotes(pages);
+    var floats = takePageFloats(pages);
+    pendingSettle = null;
+    wideFloats = hasWideFloat(pages);
     pages.forEach(function (page) {
       var articles = childrenNamed(page, "ARTICLE");
       if (articles.length) {
@@ -1832,12 +2448,14 @@
         do {
           if (!cursor) {
             if (index >= pages.length) {
+              settlePending();
               // Nothing stays queued, and every note ends on the page that
               // holds its reference, including pages past the budget.
               result.forEach(function (page) {
                 flushPending(page);
                 placeNotes(page, notes, referencedNotes(page, notes, null));
               });
+              restoreFloats(floats);
               resolve(result);
               return;
             }
@@ -1849,8 +2467,11 @@
           if (budget > 0) {
             budget -= 1;
             next = splitPage(cursor, notes);
+          } else {
+            settlePending();
           }
           if (next && index < pages.length && flowsInto(next, pages[index])) {
+            settlePending();
             flowInto(next, pages[index]);
             next = null;
           }
@@ -1960,6 +2581,122 @@
     });
   }
 
+  // Word breaks an equation wider than its column after a comma or before a
+  // relation or operator, and every line stays in the column. Chrome's
+  // MathML does not wrap: an equation in a table cell of a two-column paper
+  // widened its table across the gap, over the next column's text. An
+  // equation that reaches past its paragraph, or fills its paragraph and
+  // makes its table wider than a column, is cut at those breaks into
+  // equations of their own, which the line wraps between, left-aligned in
+  // one block as Word sets them.
+  var MATH_TOKEN = /^(ms|mi|mn|mo|mtext)$/i;
+  var MATH_OPERATOR = /[=+\-*\/<>\u00b1\u00d7\u00f7\u2212\u2248\u2260\u2264\u2265]/;
+
+  function wrapWideMaths(container) {
+    if (!container.querySelectorAll) {
+      return;
+    }
+    var maths = container.querySelectorAll("math");
+    if (!maths.length) {
+      return;
+    }
+    Array.prototype.filter.call(maths, function (math) {
+      return mathExcess(math) > 0.5;
+    }).forEach(function (math) {
+      Array.prototype.slice.call(math.children).forEach(splitMathToken);
+      var block = document.createElement("span");
+      block.className = "ld-math-lines";
+      var part = null;
+      Array.prototype.slice.call(math.children).forEach(function (item, index, items) {
+        if (!part || breaksBefore(items, index)) {
+          part = block.appendChild(math.cloneNode(false));
+        }
+        part.appendChild(item);
+      });
+      math.parentNode.replaceChild(block, math);
+    });
+  }
+
+  // How far the equation reaches past its paragraph, or, when it fills its
+  // paragraph, how much wider than a column its block is. An equation that
+  // fits stays whole.
+  function mathExcess(math) {
+    var paragraph = math.closest("p");
+    if (!paragraph) {
+      return 0;
+    }
+    var rect = math.getBoundingClientRect();
+    var own = paragraph.getBoundingClientRect();
+    // Not laid out (a hidden pane): nothing to compare, and every equation
+    // looked wider than its 0-wide column.
+    if (!own.width) {
+      return 0;
+    }
+    var excess = rect.right - own.right;
+    var article = paragraph.closest("article");
+    if (!article || rect.width < own.width - 1) {
+      return excess;
+    }
+    var outer = paragraph;
+    while (outer.parentElement !== article) {
+      outer = outer.parentElement;
+    }
+    return Math.max(excess, outer.getBoundingClientRect().width - columnWidth(article));
+  }
+
+  function columnWidth(article) {
+    var style = getComputedStyle(article);
+    var count = parseInt(style.columnCount, 10) || 1;
+    var scale = article.offsetWidth ? article.getBoundingClientRect().width / article.offsetWidth : 1;
+    var inner = article.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+    return (inner - (parseFloat(style.columnGap) || 0) * (count - 1)) / count * scale;
+  }
+
+  // "a, b = c / d" becomes "a, " "b " "= c " "/ d": a break may follow a
+  // comma and its spaces, or come before an operator, a slash among them.
+  function splitMathToken(token) {
+    if (!MATH_TOKEN.test(token.nodeName) || token.firstElementChild) {
+      return;
+    }
+    var text = token.textContent;
+    var pieces = [];
+    var start = 0;
+    for (var index = 0; index < text.length; index += 1) {
+      var character = text.charAt(index);
+      if (character === ",") {
+        var end = index + 1;
+        while (text.charAt(end) === " ") {
+          end += 1;
+        }
+        pieces.push(text.slice(start, end));
+        start = end;
+        index = end - 1;
+      } else if (index > start && MATH_OPERATOR.test(character)) {
+        pieces.push(text.slice(start, index));
+        start = index;
+      }
+    }
+    if (start < text.length) {
+      pieces.push(text.slice(start));
+    }
+    if (pieces.length < 2) {
+      return;
+    }
+    pieces.forEach(function (piece) {
+      var copy = token.cloneNode(false);
+      copy.textContent = piece;
+      token.parentNode.insertBefore(copy, token);
+    });
+    token.parentNode.removeChild(token);
+  }
+
+  function breaksBefore(items, index) {
+    var before = items[index - 1];
+    var item = items[index];
+    return (MATH_TOKEN.test(before.nodeName) && /,\s*$/.test(before.textContent)) ||
+      (MATH_TOKEN.test(item.nodeName) && MATH_OPERATOR.test(item.textContent.trim().charAt(0)));
+  }
+
   // Width of one space in each run font, for shrinkJustifiedSpaces.
   var spaceContext = null;
   var spaceWidths = new Map();
@@ -2030,13 +2767,21 @@
       var own = getComputedStyle(paragraph);
       var size = parseFloat(own.fontSize) > largest + 0.01 ? largest + "px" : "";
       var font = family && own.fontFamily !== family ? family : "";
+      // docx-preview gives a paragraph a min-height of its style's size
+      // (w:sz), so that an empty one keeps a line; with text, the floor held
+      // a one-line paragraph of 8 pt runs in a 10 pt style at 10 pt, where
+      // Word's line is 9.2 pt, and a box of two tables ran 10 pt taller.
+      var floor = size && Math.abs(parseFloat(own.minHeight) - parseFloat(own.fontSize)) < 0.01 ? size : "";
       if (size || font) {
-        changes.push([paragraph, size, font]);
+        changes.push([paragraph, size, font, floor]);
       }
     });
     changes.forEach(function (change) {
       if (change[1]) {
         change[0].style.fontSize = change[1];
+      }
+      if (change[3]) {
+        change[0].style.minHeight = change[3];
       }
       if (change[2]) {
         change[0].style.fontFamily = change[2];
@@ -2237,7 +2982,443 @@
     matchStandInWidths(container);
     fitParagraphsToRuns(container);
     setSingleLines(container);
+    // After the runs' sizes are read (fitParagraphsToRuns), so the smaller
+    // capitals do not set a paragraph's size; before any line is measured.
+    matchSmallCaps(container);
+    alignLabels(container);
+    // Before the tabs: setTabStops reads the layout this pass reads, so a
+    // page with no wide equation is not laid out again. Read after the last
+    // pass, it laid the 19-page paper's body out once more (6 MiB).
+    wrapWideMaths(container);
+    setTabStops(container);
     shrinkJustifiedSpaces(container);
+  }
+
+  // Word draws small capitals (w:smallCaps) at 80% of the run's size,
+  // rounded to the nearest half point (11.5 pt runs get 9 pt letters), and
+  // its spaces too; Chrome draws them at 70% and keeps the spaces whole. A
+  // centred IEEE heading's first line was 3.7 pt narrower than Word's, took
+  // one word more and moved its label 12 pt left. Each run of lower case
+  // letters and spaces in small-capital text becomes a span of capitals at
+  // that size (the text itself is kept, for copying and search). Digits,
+  // punctuation and capitals stay at full size, as in Word's PDF. A run in
+  // capitals as well (w:caps) is left alone: Word draws all of it in full
+  // size capitals. A letter whose capital is two letters ("ß") stays as it
+  // is, at the small size, as in Word.
+  var SMALL_CAPS_CLASS = "ld-sc";
+  var SMALL_CAPS_KEEP_CLASS = "ld-sc-keep";
+  var smallCapsSelectors = new WeakMap();
+
+  function smallCapsSelector() {
+    var selectors = ['[style*="small-caps"]'];
+    Array.prototype.forEach.call(document.styleSheets, function (sheet) {
+      var found = smallCapsSelectors.get(sheet);
+      if (!found) {
+        found = [];
+        var rules = null;
+        try {
+          rules = sheet.cssRules;
+        } catch (error) {
+          rules = null;
+        }
+        Array.prototype.forEach.call(rules || [], function (rule) {
+          if (rule.selectorText && rule.style && /small-caps/.test(rule.style.fontVariant || rule.style.fontVariantCaps || "") &&
+              rule.selectorText.indexOf("." + SMALL_CAPS_CLASS) < 0) {
+            found.push(rule.selectorText);
+          }
+        });
+        smallCapsSelectors.set(sheet, found);
+      }
+      selectors = selectors.concat(found);
+    });
+    return selectors.join(",");
+  }
+
+  // The small letters' size as a share of the run's: 80% of the size in
+  // points, to the nearest half point.
+  function smallCapsScale(fontSize) {
+    var points = parseFloat(fontSize) * 0.75;
+    return points > 0 ? Math.round(points * 1.6) / 2 / points : 0.8;
+  }
+
+  function smallCapsSpan(text, scale, keep) {
+    var small = document.createElement("span");
+    small.className = keep ? SMALL_CAPS_CLASS + " " + SMALL_CAPS_KEEP_CLASS : SMALL_CAPS_CLASS;
+    small.style.fontSize = scale + "em";
+    small.textContent = text;
+    return small;
+  }
+
+  function matchSmallCaps(container) {
+    if (!container.querySelectorAll) {
+      return;
+    }
+    var elements = [];
+    container.querySelectorAll(smallCapsSelector()).forEach(function (element) {
+      if (!hasOwnText(element)) {
+        return;
+      }
+      var style = getComputedStyle(element);
+      if (style.fontVariantCaps === "small-caps" && style.textTransform !== "uppercase") {
+        elements.push({ element: element, scale: smallCapsScale(style.fontSize) });
+      }
+    });
+    elements.forEach(function (item) {
+      var element = item.element;
+      Array.prototype.slice.call(element.childNodes).forEach(function (node) {
+        if (node.nodeType !== 3 || !/[^\S\u00a0]|\p{Ll}/u.test(node.data)) {
+          return;
+        }
+        var parts = node.data.split(/((?:[^\S\u00a0]|\p{Ll})+)/u);
+        var fragment = document.createDocumentFragment();
+        parts.forEach(function (part, index) {
+          if (!part) {
+            return;
+          }
+          if (!(index % 2)) {
+            fragment.appendChild(document.createTextNode(part));
+            return;
+          }
+          if (part.toUpperCase().length === part.length) {
+            fragment.appendChild(smallCapsSpan(part, item.scale, false));
+            return;
+          }
+          // Letters whose capital is more than one letter, apart.
+          part.split(/(\p{Ll})/u).reduce(function (runs, piece) {
+            if (piece) {
+              var keep = piece.length === 1 && piece.toUpperCase().length > 1;
+              var last = runs[runs.length - 1];
+              if (last && last.keep === keep) {
+                last.text += piece;
+              } else {
+                runs.push({ text: piece, keep: keep });
+              }
+            }
+            return runs;
+          }, []).forEach(function (run) {
+            fragment.appendChild(smallCapsSpan(run.text, item.scale, run.keep));
+          });
+        });
+        element.replaceChild(fragment, node);
+      });
+    });
+  }
+
+  // A numbering label Word centres (or right-aligns) on the indent
+  // (Fixups.markTabs marks its paragraph): the label moves back by half (or
+  // all) of its width, before the tab after it is sized. A heading numbered
+  // "III." in a centred level started its label 6 pt right of Word's.
+  function alignLabels(container) {
+    if (!container.querySelectorAll) {
+      return;
+    }
+    var paragraphs = Array.prototype.slice.call(container.querySelectorAll("p.ld-lj-center, p.ld-lj-right"));
+    var widths = paragraphs.map(function (paragraph) {
+      return parseFloat(getComputedStyle(paragraph, "::before").width) || 0;
+    });
+    paragraphs.forEach(function (paragraph, index) {
+      var share = paragraph.classList.contains("ld-lj-center") ? 0.5 : 1;
+      paragraph.style.setProperty("--ld-lj", -widths[index] * share + "px");
+    });
+  }
+
+  // Word's tab stops (Fixups.markTabs). A tab goes to the first stop past
+  // it: one of the paragraph's own, the stop a hanging indent makes at the
+  // left indent, or after the paragraph's last stop a default one every
+  // documentTabInterval points. Stops are measured from the left edge of
+  // the paragraph's column or cell. A right or centred stop ends or centres
+  // the text after the tab on the stop. Each round sizes one tab of every
+  // paragraph, the first tabs first: all positions are read, then all widths
+  // written, so the document is laid out once a round, not once a tab.
+  var documentTabInterval = 36;
+  var TAB_LEADERS = { o: ".", m: "\u00b7", h: "-", u: "_" };
+  var TAB_WIDTH_CLASS = /(^|\s)ld-l\d+(?=\s|$)/g;
+
+  function tabParagraph(paragraph) {
+    var style = getComputedStyle(paragraph);
+    var box = paragraph.getBoundingClientRect();
+    var width = parseFloat(style.width);
+    if (style.direction === "rtl" || !(box.width > 0) || !(width > 0)) {
+      return null;
+    }
+    // Rectangles are zoomed, computed lengths are not.
+    var scale = box.width / width;
+    var marginLeft = parseFloat(style.marginLeft) || 0;
+    var indent = marginLeft * 0.75;
+    var stops = Fixups.parseTabStops(paragraph.className);
+    var last = 0;
+    stops.forEach(function (stop) {
+      last = Math.max(last, stop.position);
+    });
+    if ((parseFloat(style.textIndent) || 0) < 0) {
+      stops.push({ kind: "l", position: indent, leader: "" });
+    }
+    stops.sort(function (a, b) {
+      return a.position - b.position;
+    });
+    return { margin: marginLeft * scale, perPoint: scale * 4 / 3, stops: stops, last: last,
+      right: (marginLeft + width) * 0.75, marginRight: parseFloat(style.marginRight) || 0,
+      label: alignedLabel(paragraph, style, scale) };
+  }
+
+  // A label Word centres (or right-aligns) on the indent (alignLabels) sits
+  // there in Word's own frame, and the tab after it goes to the first stop
+  // past the label's right edge, wherever the line itself lands: in a
+  // centred heading "I." ended 5.9 pt / 2 past the indent and the text
+  // started at the style's 10.8 pt stop, 7.8 pt after the label. Measured
+  // from the column, the label tab took 10.3 pt. Returns where the line
+  // starts in that frame (points from the column) and how far past the
+  // line's start the label ends (pixels), or null.
+  function alignedLabel(paragraph, style, scale) {
+    if (!paragraph.classList.contains("ld-lj-center") && !paragraph.classList.contains("ld-lj-right")) {
+      return null;
+    }
+    var first = paragraph.querySelector("span." + Fixups.TAB_CLASS);
+    if (!first) {
+      return null;
+    }
+    var head = document.createRange();
+    head.setStart(paragraph, 0);
+    head.setEndBefore(first);
+    if (/\S/.test(head.toString())) {
+      return null;
+    }
+    var width = parseFloat(getComputedStyle(paragraph, "::before").width) || 0;
+    var share = paragraph.classList.contains("ld-lj-center") ? 0.5 : 1;
+    return { tab: first, start: ((parseFloat(style.marginLeft) || 0) + (parseFloat(style.textIndent) || 0)) * 0.75,
+      past: width * (1 - share) * scale };
+  }
+
+  // Where a tab's line measures from: the left of the paragraph's fragment
+  // that holds the line, less its left margin. A paragraph can move to the
+  // other column between rounds, as earlier tabs get their widths, and one
+  // split across columns has a fragment in each; measured from where it was
+  // first, a heading's second tab in the right column took no width.
+  function tabOrigin(item, line) {
+    var rects = item.paragraph.getClientRects();
+    var fragment = rects[0];
+    for (var index = 0; index < rects.length; index += 1) {
+      var rect = rects[index];
+      if (line.top >= rect.top - 1 && line.bottom <= rect.bottom + 1 && line.left >= rect.left - 1 - item.info.margin &&
+          line.left <= rect.right + 1) {
+        fragment = rect;
+        break;
+      }
+    }
+    return fragment ? fragment.left - item.info.margin : 0;
+  }
+
+  // How far past the paragraph's right indent (in points) its furthest
+  // right, centred or decimal stop lies. A tab passes every stop its line
+  // has already passed, so one tab can reach the last.
+  function overhang(info) {
+    var reach = 0;
+    info.stops.forEach(function (stop) {
+      if (stop.kind !== "l") {
+        reach = Math.max(reach, stop.position - info.right);
+      }
+    });
+    return reach > TAB_SLACK ? reach : 0;
+  }
+
+  // A tab that already ends on a stop has passed it. Chrome places text in
+  // 1/64 px steps and widths are rounded to 0.01 pt, so a tab sized to
+  // reach 14.4 pt can end at 14.39 pt: the next tab then went 0.01 pt to
+  // the same stop, and a heading's text sat 21.6 pt left of Word's.
+  var TAB_SLACK = 0.06;
+  function nextTabStop(info, x) {
+    for (var index = 0; index < info.stops.length; index += 1) {
+      if (info.stops[index].position > x + TAB_SLACK) {
+        return info.stops[index];
+      }
+    }
+    var interval = documentTabInterval;
+    var position = (Math.floor(Math.max(info.last, 0) / interval) + 1) * interval;
+    while (position <= x + TAB_SLACK) {
+      position += interval;
+    }
+    return { kind: "l", position: position, leader: "" };
+  }
+
+  function widthOnLine(range, line) {
+    var left = Infinity;
+    var right = -Infinity;
+    Array.prototype.forEach.call(range.getClientRects(), function (rect) {
+      if (rect.width > 0 && rect.bottom > line.top + 1 && rect.top < line.bottom - 1) {
+        left = Math.min(left, rect.left);
+        right = Math.max(right, rect.right);
+      }
+    });
+    return right > left ? right - left : 0;
+  }
+
+  // The width of a range's text laid on one line: the widths of the lines it
+  // takes, added. Text after a centred or right tab that wraps would fit on
+  // the line with a narrower tab, as Word sets it.
+  function widthAcrossLines(range) {
+    var lines = [];
+    Array.prototype.forEach.call(range.getClientRects(), function (rect) {
+      if (!(rect.width > 0)) {
+        return;
+      }
+      var line = null;
+      for (var index = 0; index < lines.length && !line; index += 1) {
+        if (rect.top < lines[index].bottom - 1 && rect.bottom > lines[index].top + 1) {
+          line = lines[index];
+        }
+      }
+      if (line) {
+        line.left = Math.min(line.left, rect.left);
+        line.right = Math.max(line.right, rect.right);
+      } else {
+        lines.push({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
+      }
+    });
+    return lines.reduce(function (sum, line) {
+      return sum + line.right - line.left;
+    }, 0);
+  }
+
+  // The width of the text after a tab up to the next tab, as if on one
+  // line. A page field still holds its markers and keyword until the page is
+  // numbered (Fixups.PAGE_FIELD_START, numberPageFields); they are not
+  // printed, so their width is left out, and the field's own text is
+  // reported so the tab can follow the number each page prints.
+  function textAfterTab(tab, next, paragraph, line) {
+    var range = document.createRange();
+    range.setStartAfter(tab);
+    if (next) {
+      range.setEndBefore(next);
+    } else {
+      range.setEnd(paragraph, paragraph.childNodes.length);
+    }
+    var result = { width: widthAcrossLines(range), fieldChars: 0, fieldWidth: 0 };
+    if (paragraph.textContent.indexOf(Fixups.PAGE_FIELD_START) < 0) {
+      return result;
+    }
+    var part = document.createRange();
+    var measure = function (node, start, end) {
+      part.setStart(node, start);
+      part.setEnd(node, end);
+      return widthOnLine(part, line);
+    };
+    var walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (!range.intersectsNode(node)) {
+        continue;
+      }
+      var text = node.nodeValue;
+      var start = text.indexOf(Fixups.PAGE_FIELD_START);
+      while (start >= 0) {
+        var colon = text.indexOf(":", start);
+        var end = colon < 0 ? -1 : text.indexOf(Fixups.PAGE_FIELD_END, colon);
+        if (end < 0) {
+          break;
+        }
+        result.width -= measure(node, start, colon + 1) + measure(node, end, end + 1);
+        result.fieldChars += end - colon - 1;
+        result.fieldWidth += measure(node, colon + 1, end);
+        start = text.indexOf(Fixups.PAGE_FIELD_START, end);
+      }
+    }
+    result.width = Math.max(0, result.width);
+    return result;
+  }
+
+  var TAB_FIELD = "data-ld-tab-field";
+
+  // A right or centred tab before a page number was sized for the number
+  // Word saved; each page prints its own, which may have more or fewer
+  // digits. Digits are equally wide in the fonts documents use, so the tab
+  // gives up the width of the digits added, or half of it when centred,
+  // without measuring the page again.
+  function refitFieldTabs(paragraph, added) {
+    paragraph.querySelectorAll("span[" + TAB_FIELD + "]").forEach(function (tab) {
+      var parts = tab.getAttribute(TAB_FIELD).split(" ");
+      var width = Number(parts[1]) - added * Number(parts[2]) * (parts[0] === "c" ? 0.5 : 1);
+      tab.className = tab.className.replace(TAB_WIDTH_CLASS, "") + " " +
+        lineClass("width", Math.max(0, Math.round(width * 100) / 100) + "pt");
+    });
+  }
+
+  function setTabStops(container) {
+    if (!container.querySelectorAll) {
+      return;
+    }
+    var items = [];
+    var byParagraph = new Map();
+    container.querySelectorAll("span." + Fixups.TAB_CLASS).forEach(function (tab) {
+      var paragraph = tab.closest("p");
+      if (!paragraph) {
+        return;
+      }
+      var item = byParagraph.get(paragraph);
+      if (!item) {
+        item = { paragraph: paragraph, tabs: [], info: undefined };
+        byParagraph.set(paragraph, item);
+        items.push(item);
+      }
+      item.tabs.push(tab);
+    });
+    // Word keeps a right, centred or decimal stop past the right indent, and
+    // the line its tab is on reaches out to the stop. Here such a line
+    // wrapped before its tabs had their widths: a contents page whose dotted
+    // stop sat 5 pt past the indent took 18 pages to Word's 15. A paragraph
+    // with a tab reaches out to such a stop.
+    var reaches = items.map(function (item) {
+      item.info = tabParagraph(item.paragraph);
+      return item.info ? overhang(item.info) : 0;
+    });
+    items.forEach(function (item, index) {
+      if (reaches[index] > 0) {
+        item.paragraph.style.marginRight = Math.round((item.info.marginRight - reaches[index] * 4 / 3) * 100) / 100 + "px";
+      }
+    });
+    for (var round = 0; items.length; round += 1) {
+      var sizes = [];
+      items.forEach(function (item) {
+        if (!item.info) {
+          return;
+        }
+        var tab = item.tabs[round];
+        var line = tab.getBoundingClientRect();
+        var label = item.info.label;
+        var labelTab = label ? label.tab.getBoundingClientRect() : null;
+        var x = labelTab && Math.abs(labelTab.top - line.top) < 1 ?
+          label.start + (line.left - labelTab.left + label.past) / item.info.perPoint :
+          (line.left - tabOrigin(item, line)) / item.info.perPoint;
+        var stop = nextTabStop(item.info, x);
+        var width = stop.position - x;
+        var field = "";
+        if (stop.kind !== "l") {
+          var after = textAfterTab(tab, item.tabs[round + 1] || null, item.paragraph, line);
+          var afterWidth = after.width / item.info.perPoint;
+          width -= stop.kind === "c" ? afterWidth / 2 : afterWidth;
+          if (after.fieldChars > 0 && stop.kind !== "d") {
+            field = stop.kind + " " + Math.max(0, Math.round(width * 100) / 100) + " " +
+              Math.round(after.fieldWidth / item.info.perPoint / after.fieldChars * 1000) / 1000;
+          }
+        }
+        sizes.push({ tab: tab, width: Math.max(0, Math.round(width * 100) / 100), leader: stop.leader, field: field });
+      });
+      sizes.forEach(function (size) {
+        var tab = size.tab;
+        tab.className = tab.className.replace(TAB_WIDTH_CLASS, "") + " " + lineClass("width", size.width + "pt");
+        if (size.field) {
+          tab.setAttribute(TAB_FIELD, size.field);
+        } else {
+          tab.removeAttribute(TAB_FIELD);
+        }
+        if (size.leader && TAB_LEADERS[size.leader]) {
+          tab.classList.add("ld-tab-leader");
+          tab.textContent = new Array(Math.ceil(size.width / 2) + 2).join(TAB_LEADERS[size.leader]);
+        }
+      });
+      items = items.filter(function (item) {
+        return item.info && item.tabs.length > round + 1;
+      });
+    }
   }
 
   // The header and footer of a title-page section's later pages. docx-preview
@@ -2398,6 +3579,8 @@
       (node.nodeName === "STYLE" ? styles : body).push(node);
     });
     body.forEach(fixMathTokens);
+    body.forEach(liftFloats);
+    body.forEach(hideCustomMarks);
     var wrapper = body.filter(function (node) {
       return node.classList && node.classList.contains("docx-wrapper");
     })[0];
@@ -2431,6 +3614,15 @@
     body.forEach(matchWordLines);
     prepareDocumentDom(pages.slice(0, FIRST_BATCH), 0, pages.length);
     showLoadingPages(current && current.report);
+    // In the hidden pane every paragraph is 0 wide, so no tab got a width and
+    // a contents page lost its leaders, and no equation could be measured.
+    // Both passes run again once the pane is shown. Running all of
+    // matchWordLines here instead cost about 10 MiB more on the 1,000-page
+    // report in WebView2 (CI's M-04).
+    body.forEach(function (node) {
+      wrapWideMaths(node);
+      setTabStops(node);
+    });
     var startTop = elements.docScroller.scrollTop;
     var next = 0;
     return new Promise(function (resolve) {
@@ -2591,11 +3783,20 @@
   function numberPageFields(page, pageNumber, pageCount) {
     var walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT);
     var node;
+    var filled = [];
     while ((node = walker.nextNode())) {
       if (node.nodeValue.indexOf(Fixups.PAGE_FIELD_START) >= 0) {
-        node.nodeValue = Fixups.fillPageFields(node.nodeValue, pageNumber, pageCount);
+        filled.push(node);
       }
     }
+    filled.forEach(function (text) {
+      var saved = text.nodeValue.replace(/\ue000[^:\ue001]*:/g, "").replace(/\ue001/g, "").length;
+      text.nodeValue = Fixups.fillPageFields(text.nodeValue, pageNumber, pageCount);
+      var paragraph = text.parentNode && text.parentNode.closest ? text.parentNode.closest("p") : null;
+      if (paragraph && text.nodeValue.length !== saved) {
+        refitFieldTabs(paragraph, text.nodeValue.length - saved);
+      }
+    });
   }
 
   // Prepares newly attached pages: lazy layout, page numbers, document ids
@@ -4175,6 +5376,7 @@
   updateShortcutTitles();
   setControlsEnabled(false);
   root.dataset.renderState = "empty";
+  openStrictPackages();
   if (!window.docx || !Fixups || !Wording) {
     root.dataset.renderState = "failed";
     showStatus("LeanDoc could not load its document renderer.", "error");

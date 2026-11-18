@@ -32,9 +32,11 @@ import java.util.zip.ZipOutputStream;
  * providers do, so the app cannot rely on seeking or on a file path. The path
  * is the fixture path, for example features/styles.docx. Names ending in
  * "-nosize" report no size; "huge.docx" streams 65 MiB of zeros, as a broken
- * download would. "large-photos.docx" is features/images.docx with two of
- * its pictures replaced by photo-sized noise images, about 24 MB in all, the
- * size of a report full of phone photos; it is made once into the cache.
+ * download would. Names ending in "-cut" serve the first half of the file,
+ * as a download cut short does. "large-photos.docx" is features/images.docx
+ * with two of its pictures replaced by photo-sized noise images, about 24 MB
+ * in all, the size of a report full of phone photos; it is made once into
+ * the cache.
  *
  * <p>Written in Java on purpose: Android runs this provider in the test
  * package's own process, where the Kotlin standard library is missing because
@@ -91,7 +93,7 @@ public final class FixtureProvider extends ContentProvider {
         Object[] row = new Object[columns.length];
         for (int i = 0; i < columns.length; i++) {
             if (OpenableColumns.DISPLAY_NAME.equals(columns[i])) {
-                row[i] = path.substring(path.lastIndexOf('/') + 1).replace("-nosize", "");
+                row[i] = path.substring(path.lastIndexOf('/') + 1).replace("-nosize", "").replace("-cut", "");
             } else if (OpenableColumns.SIZE.equals(columns[i])) {
                 try {
                     row[i] = path.contains("-nosize") ? null : sizeOf(path);
@@ -160,6 +162,13 @@ public final class FixtureProvider extends ContentProvider {
 
     private void write(String path, Sink out) throws IOException {
         String clean = path.replace("-nosize", "");
+        if (clean.endsWith("-cut")) {
+            ByteArrayOutputStream whole = new ByteArrayOutputStream();
+            write(clean.substring(0, clean.length() - "-cut".length()), (chunk, length) -> whole.write(chunk, 0, length));
+            byte[] bytes = whole.toByteArray();
+            out.write(bytes, bytes.length / 2);
+            return;
+        }
         byte[] buffer = new byte[64 * 1024];
         if (clean.equals("huge.docx")) {
             for (long sent = 0; sent < HUGE_BYTES; sent += buffer.length) out.write(buffer, buffer.length);

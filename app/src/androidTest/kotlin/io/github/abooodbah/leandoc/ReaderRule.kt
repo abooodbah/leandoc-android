@@ -1,6 +1,7 @@
 package io.github.abooodbah.leandoc
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.json.JSONTokener
 import org.junit.Assert.fail
+import kotlin.math.roundToInt
 
 /** Helpers for driving the reader page from instrumented tests. */
 object Reader {
@@ -105,6 +107,56 @@ object Reader {
         }
         val up = down + (steps + 1) * 10L
         Focus.touch(target, MotionEvent.ACTION_UP, down, up, x, endY)
+    }
+
+    /** The page view's pages. */
+    const val PAGES = "document.querySelectorAll('#docBody .docx-wrapper > section.docx')"
+
+    /** The reader applies a zoom in the frame after it sets data-zoom. */
+    const val ZOOM_SETTLED = "!document.documentElement.hasAttribute('data-zoom-pending')"
+
+    /** The zoom in percent, as the reader shows it. */
+    fun zoom(scenario: ActivityScenario<MainActivity>): String =
+        js(scenario, "document.documentElement.dataset.zoom") as String
+
+    fun pageCount(scenario: ActivityScenario<MainActivity>): Int =
+        (js(scenario, "$PAGES.length") as Number).toInt()
+
+    /**
+     * Scrolls page [index] to the top of the document area and waits until
+     * it is drawn: a page off screen is not (content-visibility: auto), and
+     * the boxes reported inside it can mix zoomed and unzoomed units.
+     */
+    fun bringPageIntoView(scenario: ActivityScenario<MainActivity>, index: Int) {
+        js(scenario, "$PAGES[$index].scrollIntoView({block: 'start'})")
+        SystemClock.sleep(300)
+    }
+
+    /** Makes the WebView [dp] wide, as on a smaller screen, and waits for the new zoom. */
+    fun narrow(scenario: ActivityScenario<MainActivity>, dp: Int) {
+        val before = zoom(scenario)
+        scenario.onActivity { activity ->
+            val view = activity.webViewForTest!!
+            view.layoutParams = view.layoutParams.apply {
+                width = (dp * activity.resources.displayMetrics.density).roundToInt()
+            }
+        }
+        waitFor(scenario, "document.documentElement.clientWidth <= $dp")
+        waitFor(scenario, "document.documentElement.dataset.zoom !== '$before' && $ZOOM_SETTLED")
+    }
+
+    /** Runs [block] in landscape, once the page has its new zoom, then turns back. */
+    fun landscape(scenario: ActivityScenario<MainActivity>, block: () -> Unit) {
+        val before = zoom(scenario)
+        scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        try {
+            waitFor(scenario, "window.innerWidth > window.innerHeight")
+            waitFor(scenario, "document.documentElement.dataset.zoom !== '$before' && $ZOOM_SETTLED")
+            block()
+        } finally {
+            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+            waitFor(scenario, "window.innerWidth < window.innerHeight")
+        }
     }
 
     /** Bytes the fixture provider delivered for its last stream of [path]. */
